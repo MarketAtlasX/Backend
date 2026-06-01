@@ -36,8 +36,9 @@ class Event(Base):
     source: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     source_url: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     
-    # Relationships
-    entities = relationship("Entity", back_populates="event", cascade="all, delete-orphan")
+    # Relationships - many-to-many through EventEntity junction table
+    event_entities = relationship("EventEntity", back_populates="event", cascade="all, delete-orphan")
+    entities = relationship("Entity", secondary="event_entities", back_populates="events")
     signals = relationship("Signal", back_populates="event", cascade="all, delete-orphan")
 
     # Indexes for common queries

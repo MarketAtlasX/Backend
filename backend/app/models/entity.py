@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import String, Text, DateTime, ForeignKey, Index
+from sqlalchemy import String, Text, DateTime, Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -13,6 +13,9 @@ class Entity(Base):
     
     Entities can be countries, regions, companies, or individuals that are
     relevant to events and market movements.
+    
+    An entity can be involved in multiple events, and each event can involve
+    multiple entities (many-to-many relationship via EventEntity junction table).
     """
 
     __tablename__ = "entities"
@@ -32,9 +35,9 @@ class Entity(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     
-    # Relationships
-    event_id: Mapped[Optional[int]] = mapped_column(ForeignKey("events.id", ondelete="CASCADE"), nullable=True)
-    event = relationship("Event", back_populates="entities")
+    # Relationships - many-to-many through EventEntity junction table
+    event_entities = relationship("EventEntity", back_populates="entity", cascade="all, delete-orphan")
+    events = relationship("Event", secondary="event_entities", back_populates="entities")
     signals = relationship("Signal", back_populates="entity", cascade="all, delete-orphan")
     market_prices = relationship("MarketPrice", back_populates="entity", cascade="all, delete-orphan")
 
