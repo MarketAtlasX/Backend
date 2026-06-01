@@ -13,6 +13,7 @@ from app.database import Base
 # Import all models to register them with Base.metadata
 from app.models.event import Event  # noqa: F401
 from app.models.entity import Entity  # noqa: F401
+from app.models.event_entity import EventEntity  # noqa: F401
 from app.models.market_price import MarketPrice  # noqa: F401
 from app.models.signal import Signal  # noqa: F401
 
