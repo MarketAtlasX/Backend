@@ -1,42 +1,39 @@
-from pydantic_settings import BaseSettings, SettingsConfigDict
+import os
 from typing import Optional
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 
-class Settings(BaseSettings):
+class Settings:
     """Application settings loaded from environment variables."""
 
     # API Configuration
-    api_title: str = "MarketAtlas"
-    api_version: str = "1.0.0"
-    api_debug: bool = False
+    api_title: str = os.getenv("API_TITLE", "MarketAtlas")
+    api_version: str = os.getenv("API_VERSION", "1.0.0")
+    api_debug: bool = os.getenv("API_DEBUG", "False").lower() == "true"
 
     # Database Configuration
-    db_driver: str = "postgresql+asyncpg"
-    db_user: str
-    db_password: str
-    db_host: str
-    db_port: int = 5432
-    db_name: str
-    db_pool_size: int = 20
-    db_max_overflow: int = 10
-    db_echo: bool = False
+    db_driver: str = os.getenv("DB_DRIVER", "postgresql+asyncpg")
+    db_user: str = os.getenv("DB_USER", "postgres")
+    db_password: str = os.getenv("DB_PASSWORD", "postgres")
+    db_host: str = os.getenv("DB_HOST", "localhost")
+    db_port: int = int(os.getenv("DB_PORT", "5432"))
+    db_name: str = os.getenv("DB_NAME", "marketatlas")
+    db_pool_size: int = int(os.getenv("DB_POOL_SIZE", "20"))
+    db_max_overflow: int = int(os.getenv("DB_MAX_OVERFLOW", "10"))
+    db_echo: bool = os.getenv("DB_ECHO", "False").lower() == "true"
 
     # Redis Configuration
-    redis_url: str = "redis://localhost:6379/0"
+    redis_url: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
     # Celery Configuration
-    celery_broker_url: Optional[str] = None
-    celery_result_backend: Optional[str] = None
+    celery_broker_url: Optional[str] = os.getenv("CELERY_BROKER_URL")
+    celery_result_backend: Optional[str] = os.getenv("CELERY_RESULT_BACKEND")
 
     # Feature Flags
-    enable_workers: bool = True
-
-    model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
-        extra="ignore",
-        case_sensitive=False,
-    )
+    enable_workers: bool = os.getenv("ENABLE_WORKERS", "True").lower() == "true"
 
     @property
     def database_url(self) -> str:

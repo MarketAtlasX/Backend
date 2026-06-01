@@ -4,6 +4,12 @@ from fastapi import FastAPI
 
 from app.config import settings
 from app.database import db_manager
+from app.routes import (
+    event_router,
+    entity_router,
+    market_price_router,
+    signal_router,
+)
 
 
 @asynccontextmanager
@@ -24,6 +30,12 @@ app = FastAPI(
     debug=settings.api_debug,
     lifespan=lifespan,
 )
+
+# Include all routers
+app.include_router(event_router)
+app.include_router(entity_router)
+app.include_router(market_price_router)
+app.include_router(signal_router)
 
 
 @app.get("/health")
