@@ -1,7 +1,13 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+
+def _naive_utc(v: datetime) -> datetime:
+    if v.tzinfo is not None:
+        return v.astimezone(timezone.utc).replace(tzinfo=None)
+    return v
 
 
 class MarketPriceBase(BaseModel):
@@ -15,6 +21,8 @@ class MarketPriceBase(BaseModel):
     volume: int = Field(..., ge=0, description="Trading volume")
     price_date: datetime = Field(..., description="Date of the price data")
     source: str = Field(default="yfinance", description="Source of the price data")
+
+    _normalize_price_date = field_validator("price_date")(_naive_utc)
 
 
 class MarketPriceCreate(MarketPriceBase):

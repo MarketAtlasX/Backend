@@ -1,6 +1,7 @@
 from typing import TypeVar, Generic, Type, Optional, List
-from sqlalchemy import select, desc
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql import ColumnElement
 
 from app.database import Base
 
@@ -10,7 +11,7 @@ T = TypeVar("T", bound=Base)
 class BaseRepository(Generic[T]):
     """
     Generic base repository providing common CRUD operations.
-    
+
     All specific repositories inherit from this to reduce code duplication.
     """
 
@@ -30,24 +31,24 @@ class BaseRepository(Generic[T]):
         return await self.session.get(self.model, obj_id)
 
     async def get_all(
-        self, 
-        skip: int = 0, 
-        limit: int = 100
+        self,
+        skip: int = 0,
+        limit: int = 100,
     ) -> List[T]:
         """Retrieve all records with pagination."""
         query = select(self.model).offset(skip).limit(limit)
         result = await self.session.execute(query)
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     async def update(self, obj_id: int, obj_in: dict) -> Optional[T]:
         """Update an existing record."""
         db_obj = await self.get_by_id(obj_id)
         if not db_obj:
             return None
-        
+
         for key, value in obj_in.items():
             setattr(db_obj, key, value)
-        
+
         self.session.add(db_obj)
         await self.session.flush()
         return db_obj
@@ -57,13 +58,31 @@ class BaseRepository(Generic[T]):
         db_obj = await self.get_by_id(obj_id)
         if not db_obj:
             return False
-        
+
         await self.session.delete(db_obj)
         await self.session.flush()
         return True
 
     async def count(self) -> int:
-        """Count total records."""
-        query = select(self.model)
+        """Count all records using a single SQL COUNT(*) query."""
+        query = select(func.count()).select_from(self.model)
         result = await self.session.execute(query)
-        return len(result.scalars().all())
+        return result.scalar_one()
+
+    async def count_where(self, whereclause: ColumnElement) -> int:
+        """
+        Count records matching an arbitrary WHERE clause using SQL COUNT(*).
+
+        Use this in concrete repositories to build accurate filtered counts
+        that mirror their filtered query methods.
+
+        Example:
+            await self.count_where(self.model.status == "active")
+        """
+        query = (
+            select(func.count())
+            .select_from(self.model)
+            .where(whereclause)
+        )
+        result = await self.session.execute(query)
+        return result.scalar_one()

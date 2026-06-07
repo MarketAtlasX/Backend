@@ -1,5 +1,6 @@
 from typing import List, Optional
 from datetime import datetime
+
 from sqlalchemy import select, and_, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -14,11 +15,15 @@ class SignalRepository(BaseRepository[Signal]):
     def __init__(self, session: AsyncSession):
         super().__init__(session, Signal)
 
+    # ------------------------------------------------------------------
+    # Queries
+    # ------------------------------------------------------------------
+
     async def get_by_event_id(
-        self, 
-        event_id: int, 
-        skip: int = 0, 
-        limit: int = 100
+        self,
+        event_id: int,
+        skip: int = 0,
+        limit: int = 100,
     ) -> List[Signal]:
         """Get all signals for an event."""
         query = (
@@ -29,13 +34,13 @@ class SignalRepository(BaseRepository[Signal]):
             .limit(limit)
         )
         result = await self.session.execute(query)
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     async def get_by_entity_id(
-        self, 
-        entity_id: int, 
-        skip: int = 0, 
-        limit: int = 100
+        self,
+        entity_id: int,
+        skip: int = 0,
+        limit: int = 100,
     ) -> List[Signal]:
         """Get all signals for an entity."""
         query = (
@@ -46,13 +51,13 @@ class SignalRepository(BaseRepository[Signal]):
             .limit(limit)
         )
         result = await self.session.execute(query)
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     async def get_by_type(
-        self, 
-        signal_type: str, 
-        skip: int = 0, 
-        limit: int = 100
+        self,
+        signal_type: str,
+        skip: int = 0,
+        limit: int = 100,
     ) -> List[Signal]:
         """Get signals filtered by type (buy, sell, hold, short)."""
         query = (
@@ -63,13 +68,13 @@ class SignalRepository(BaseRepository[Signal]):
             .limit(limit)
         )
         result = await self.session.execute(query)
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     async def get_by_status(
-        self, 
-        status: str, 
-        skip: int = 0, 
-        limit: int = 100
+        self,
+        status: str,
+        skip: int = 0,
+        limit: int = 100,
     ) -> List[Signal]:
         """Get signals filtered by status (active, closed, expired)."""
         query = (
@@ -80,13 +85,13 @@ class SignalRepository(BaseRepository[Signal]):
             .limit(limit)
         )
         result = await self.session.execute(query)
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     async def get_high_confidence(
-        self, 
-        min_confidence: float = 0.75, 
-        skip: int = 0, 
-        limit: int = 100
+        self,
+        min_confidence: float = 0.75,
+        skip: int = 0,
+        limit: int = 100,
     ) -> List[Signal]:
         """Get signals with confidence above threshold."""
         query = (
@@ -97,20 +102,12 @@ class SignalRepository(BaseRepository[Signal]):
             .limit(limit)
         )
         result = await self.session.execute(query)
-        return result.scalars().all()
-
-    async def get_active(
-        self, 
-        skip: int = 0, 
-        limit: int = 100
-    ) -> List[Signal]:
-        """Get all active signals (convenient shortcut)."""
-        return await self.get_by_status("active", skip, limit)
+        return list(result.scalars().all())
 
     async def get_by_event_and_entity(
-        self, 
-        event_id: int, 
-        entity_id: int
+        self,
+        event_id: int,
+        entity_id: int,
     ) -> Optional[Signal]:
         """Get signal for a specific event-entity combination."""
         query = (
@@ -137,3 +134,27 @@ class SignalRepository(BaseRepository[Signal]):
         )
         result = await self.session.execute(query)
         return result.scalars().first()
+
+    # ------------------------------------------------------------------
+    # Filtered counts — mirror the filter predicates above
+    # ------------------------------------------------------------------
+
+    async def count_by_event(self, event_id: int) -> int:
+        """Count signals belonging to a specific event."""
+        return await self.count_where(self.model.event_id == event_id)
+
+    async def count_by_entity(self, entity_id: int) -> int:
+        """Count signals belonging to a specific entity."""
+        return await self.count_where(self.model.entity_id == entity_id)
+
+    async def count_by_type(self, signal_type: str) -> int:
+        """Count signals matching a specific signal_type."""
+        return await self.count_where(self.model.signal_type == signal_type)
+
+    async def count_by_status(self, status: str) -> int:
+        """Count signals matching a specific status."""
+        return await self.count_where(self.model.status == status)
+
+    async def count_high_confidence(self, min_confidence: float = 0.75) -> int:
+        """Count signals with confidence at or above the threshold."""
+        return await self.count_where(self.model.confidence >= min_confidence)

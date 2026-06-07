@@ -1,57 +1,70 @@
-import os
 from typing import Optional
-from dotenv import load_dotenv
-
-# Load environment variables from .env file
-load_dotenv()
+from pydantic import Field, computed_field, model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-class Settings:
-    """Application settings loaded from environment variables."""
+class Settings(BaseSettings):
+    """
+    Application settings loaded from environment variables or a .env file.
 
+    All fields are validated at startup — a missing required variable or a
+    type mismatch (e.g. DB_PORT='abc') will raise a descriptive ValidationError
+    before the application begins serving traffic.
+    """
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore",
+    )
+
+    # -------------------------------------------------------------------------
     # API Configuration
-    api_title: str = os.getenv("API_TITLE", "MarketAtlas")
-    api_version: str = os.getenv("API_VERSION", "1.0.0")
-    api_debug: bool = os.getenv("API_DEBUG", "False").lower() == "true"
+    # -------------------------------------------------------------------------
+    api_title: str = Field(default="MarketAtlas", alias="API_TITLE")
+    api_version: str = Field(default="1.0.0", alias="API_VERSION")
+    api_debug: bool = Field(default=False, alias="API_DEBUG")
 
+    # -------------------------------------------------------------------------
     # Database Configuration
-    db_driver: str = os.getenv("DB_DRIVER", "postgresql+asyncpg")
-    db_user: str = os.getenv("DB_USER", "postgres")
-    db_password: str = os.getenv("DB_PASSWORD", "postgres")
-    db_host: str = os.getenv("DB_HOST", "localhost")
-    db_port: int = int(os.getenv("DB_PORT", "5432"))
-    db_name: str = os.getenv("DB_NAME", "marketatlas")
-    db_pool_size: int = int(os.getenv("DB_POOL_SIZE", "20"))
-    db_max_overflow: int = int(os.getenv("DB_MAX_OVERFLOW", "10"))
-    db_echo: bool = os.getenv("DB_ECHO", "False").lower() == "true"
+    # -------------------------------------------------------------------------
+    db_driver: str = Field(default="postgresql+asyncpg", alias="DB_DRIVER")
+    db_user: str = Field(default="postgres", alias="DB_USER")
+    db_password: str = Field(alias="DB_PASSWORD")
+    db_host: str = Field(default="localhost", alias="DB_HOST")
+    db_port: int = Field(default=5432, alias="DB_PORT")
+    db_name: str = Field(default="marketatlas", alias="DB_NAME")
+    db_pool_size: int = Field(default=20, alias="DB_POOL_SIZE", ge=1, le=100)
+    db_max_overflow: int = Field(default=10, alias="DB_MAX_OVERFLOW", ge=0, le=50)
+    db_echo: bool = Field(default=False, alias="DB_ECHO")
 
-    # Redis Configuration
-    redis_url: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-
-    # Celery Configuration
-    celery_broker_url: Optional[str] = os.getenv("CELERY_BROKER_URL")
-    celery_result_backend: Optional[str] = os.getenv("CELERY_RESULT_BACKEND")
-
+    # -------------------------------------------------------------------------
     # Feature Flags
-    enable_workers: bool = os.getenv("ENABLE_WORKERS", "True").lower() == "true"
+    # -------------------------------------------------------------------------
+    enable_workers: bool = Field(default=False, alias="ENABLE_WORKERS")
 
+    # -------------------------------------------------------------------------
+    # Computed properties
+    # -------------------------------------------------------------------------
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def database_url(self) -> str:
-        """Construct PostgreSQL connection URL."""
+        """Async PostgreSQL connection URL for SQLAlchemy."""
         return (
             f"{self.db_driver}://{self.db_user}:{self.db_password}"
             f"@{self.db_host}:{self.db_port}/{self.db_name}"
         )
 
+    @computed_field  # type: ignore[prop-decorator]
     @property
-    def celery_broker(self) -> str:
-        """Get Celery broker URL, defaults to Redis."""
-        return self.celery_broker_url or self.redis_url
-
-    @property
-    def celery_backend(self) -> str:
-        """Get Celery result backend URL, defaults to Redis."""
-        return self.celery_result_backend or self.redis_url
+    def sync_database_url(self) -> str:
+        """Synchronous PostgreSQL URL for Alembic migrations."""
+        sync_driver = self.db_driver.replace("+asyncpg", "")
+        return (
+            f"{sync_driver}://{self.db_user}:{self.db_password}"
+            f"@{self.db_host}:{self.db_port}/{self.db_name}"
+        )
 
 
 settings = Settings()
