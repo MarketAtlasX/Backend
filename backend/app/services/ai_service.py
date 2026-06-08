@@ -1,11 +1,12 @@
 from decimal import Decimal
 from typing import Optional
 
-from app.core.enums import SignalType, EventSeverity
-from app.schemas.signal import SignalCreate
 from market_agents.impact.impact_agent import ImpactAgent
 from market_agents.market_data.market_data_agent import MarketDataAgent
 from market_agents.recommendation.recommendation_agent import RecommendationAgent
+
+from app.core.enums import SignalType
+from app.schemas.signal import SignalCreate
 
 
 class AIAnalysisResult:
@@ -52,7 +53,7 @@ class AIService:
         event_title: str,
         event_description: str,
         event_type: str,
-        severity: EventSeverity,
+        severity: str,
         entity_name: str,
         current_price: Optional[Decimal] = None,
         price_history: Optional[list[float]] = None,
@@ -68,7 +69,6 @@ class AIService:
 
         composite_risk = state.get("composite_risk", 0.0)
         local_severity = state.get("local_severity", 0.0)
-        graph_summary = state.get("graph_summary", {})
         relations = state.get("relations", [])
 
         if price_history and len(price_history) >= 5:
@@ -80,7 +80,7 @@ class AIService:
         impact_data = {
             "composite_risk": composite_risk,
             "local_severity": local_severity,
-            "graph_summary": graph_summary,
+            "graph_summary": state.get("graph_summary", {}),
         }
         decision = self._rec_agent.decide(impact_data, snapshot)
 
@@ -98,11 +98,6 @@ class AIService:
         base_confidence = max(0.1, min(0.95, base_confidence))
         confidence = Decimal(str(round(base_confidence, 2)))
 
-        entities_str = ", ".join(state.get("entities", []))
-        relations_str = "; ".join(
-            f"{a} {rel} {b}" for a, rel, b in relations[:3]
-        )
-
         reasoning_parts = [
             f"MarketAtlas analysis of '{event_title}' for {entity_name}.",
             f"Recommendation: {action} ({rec_reason}).",
@@ -114,8 +109,12 @@ class AIService:
                 f"volatility: {snapshot['volatility']:.4f}, "
                 f"volume: {snapshot['volume']}."
             )
+        entities_str = ", ".join(state.get("entities", []))
         if entities_str:
             reasoning_parts.append(f"Entities identified: {entities_str}.")
+        relations_str = "; ".join(
+            f"{a} {rel} {b}" for a, rel, b in relations[:3]
+        )
         if relations_str:
             reasoning_parts.append(f"Relations: {relations_str}.")
         reasoning = " ".join(reasoning_parts)

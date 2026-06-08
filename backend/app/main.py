@@ -1,4 +1,11 @@
+import sys
 from contextlib import asynccontextmanager
+from pathlib import Path
+
+# Make market_agents package importable (must be before any app imports)
+_market_agents_path = Path.home() / "market_agents"
+if str(_market_agents_path.parent) not in sys.path:
+    sys.path.insert(0, str(_market_agents_path.parent))
 
 from fastapi import FastAPI
 

@@ -40,6 +40,16 @@ class Settings(BaseSettings):
     db_echo: bool = Field(default=False, alias="DB_ECHO")
 
     # -------------------------------------------------------------------------
+    # Market Agents Service (external microservice from separate repo)
+    # Runs as ``uvicorn market_agents.services.gateway:app --port 8004``
+    # -------------------------------------------------------------------------
+    market_agents_url: str = Field(
+        default="http://localhost:8004",
+        alias="MARKET_AGENTS_URL",
+        description="Base URL of the market_agents gateway service",
+    )
+
+    # -------------------------------------------------------------------------
     # Feature Flags
     # -------------------------------------------------------------------------
     enable_workers: bool = Field(default=False, alias="ENABLE_WORKERS")
