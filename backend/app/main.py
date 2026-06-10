@@ -1,11 +1,4 @@
-import sys
 from contextlib import asynccontextmanager
-from pathlib import Path
-
-# Make market_agents package importable (must be before any app imports)
-_market_agents_path = Path.home() / "market_agents"
-if str(_market_agents_path.parent) not in sys.path:
-    sys.path.insert(0, str(_market_agents_path.parent))
 
 from fastapi import FastAPI
 
@@ -17,6 +10,9 @@ from app.routes import (
     market_price_router,
     signal_router,
     analysis_router,
+    kg_router,
+    analyze_router,
+    country_router,
 )
 
 
@@ -46,6 +42,9 @@ app.include_router(entity_router)
 app.include_router(market_price_router)
 app.include_router(signal_router)
 app.include_router(analysis_router)
+app.include_router(kg_router)
+app.include_router(analyze_router)
+app.include_router(country_router)
 
 
 @app.get("/health")

@@ -39,7 +39,7 @@ class Event(Base):
 
     # Relationships - many-to-many through EventEntity junction table
     event_entities = relationship("EventEntity", back_populates="event", cascade="all, delete-orphan")
-    entities = relationship("Entity", secondary="event_entities", back_populates="events")
+    entities = relationship("Entity", secondary="event_entities", back_populates="events", overlaps="event_entities", viewonly=True)
     signals = relationship("Signal", back_populates="event", cascade="all, delete-orphan")
 
     _event_type_values = ", ".join(f"'{v}'" for v in EventType)

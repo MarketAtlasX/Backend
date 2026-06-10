@@ -13,6 +13,8 @@ class EntityBase(BaseModel):
     description: Optional[str] = Field(None, description="Entity description")
     country_code: Optional[str] = Field(None, max_length=2, description="ISO 3166-1 alpha-2 country code")
     ticker_symbols: Optional[str] = Field(None, max_length=500, description="Comma-separated ticker symbols for companies")
+    latitude: Optional[float] = Field(None, ge=-90, le=90, description="Latitude for globe visualization")
+    longitude: Optional[float] = Field(None, ge=-180, le=180, description="Longitude for globe visualization")
 
 
 class EntityCreate(EntityBase):

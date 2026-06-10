@@ -24,8 +24,8 @@ class EventEntity(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     
     # Relationships
-    event = relationship("Event", back_populates="event_entities")
-    entity = relationship("Entity", back_populates="event_entities")
+    event = relationship("Event", back_populates="event_entities", overlaps="entities")
+    entity = relationship("Entity", back_populates="event_entities", overlaps="events")
 
     # Indexes and constraints
     __table_args__ = (

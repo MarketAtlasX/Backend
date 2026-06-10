@@ -50,6 +50,16 @@ class Settings(BaseSettings):
     )
 
     # -------------------------------------------------------------------------
+    # Knowledge Graph Agent Service (external microservice)
+    # Runs as ``uvicorn service:app --port 8005`` in ../knowledge-graph-agent/
+    # -------------------------------------------------------------------------
+    kg_agent_url: str = Field(
+        default="http://localhost:8005",
+        alias="KG_AGENT_URL",
+        description="Base URL of the knowledge-graph-agent service",
+    )
+
+    # -------------------------------------------------------------------------
     # Feature Flags
     # -------------------------------------------------------------------------
     enable_workers: bool = Field(default=False, alias="ENABLE_WORKERS")

@@ -32,13 +32,17 @@ class Entity(Base):
     country_code: Mapped[Optional[str]] = mapped_column(String(2), nullable=True)  # ISO 3166-1 alpha-2
     ticker_symbols: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)  # CSV list for companies
 
+    # Geographic coordinates for globe visualization
+    latitude: Mapped[Optional[float]] = mapped_column(nullable=True)
+    longitude: Mapped[Optional[float]] = mapped_column(nullable=True)
+
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
     # Relationships - many-to-many through EventEntity junction table
     event_entities = relationship("EventEntity", back_populates="entity", cascade="all, delete-orphan")
-    events = relationship("Event", secondary="event_entities", back_populates="entities")
+    events = relationship("Event", secondary="event_entities", back_populates="entities", overlaps="event_entities", viewonly=True)
     signals = relationship("Signal", back_populates="entity", cascade="all, delete-orphan")
     market_prices = relationship("MarketPrice", back_populates="entity", cascade="all, delete-orphan")
 

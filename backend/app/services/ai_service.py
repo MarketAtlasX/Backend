@@ -17,12 +17,22 @@ class AIAnalysisResult:
         reasoning: str,
         target_price: Optional[Decimal] = None,
         stop_loss: Optional[Decimal] = None,
+        composite_risk: float = 0.0,
+        local_severity: float = 0.0,
+        entities_identified: list[str] | None = None,
+        relations: list[tuple[str, str, str]] | None = None,
+        reasoning_snapshot: dict | None = None,
     ):
         self.signal_type = signal_type
         self.confidence = confidence
         self.reasoning = reasoning
         self.target_price = target_price
         self.stop_loss = stop_loss
+        self.composite_risk = composite_risk
+        self.local_severity = local_severity
+        self.entities_identified = entities_identified or []
+        self.relations = relations or []
+        self.reasoning_snapshot = reasoning_snapshot or {}
 
     def to_signal_create(self, event_id: int, entity_id: int) -> SignalCreate:
         return SignalCreate(
@@ -55,6 +65,7 @@ class AIService:
         event_type: str,
         severity: str,
         entity_name: str,
+        ticker_symbol: Optional[str] = None,
         current_price: Optional[Decimal] = None,
         price_history: Optional[list[float]] = None,
     ) -> AIAnalysisResult:
@@ -73,6 +84,9 @@ class AIService:
 
         if price_history and len(price_history) >= 5:
             market_agent = MarketDataAgent(prices=price_history)
+            snapshot = market_agent.snapshot()
+        elif ticker_symbol:
+            market_agent = MarketDataAgent.from_yfinance(ticker_symbol)
             snapshot = market_agent.snapshot()
         else:
             snapshot = {"momentum": 0.0, "volatility": 0.0, "volume": "unknown"}
@@ -136,6 +150,11 @@ class AIService:
             reasoning=reasoning,
             target_price=target_price,
             stop_loss=stop_loss,
+            composite_risk=composite_risk,
+            local_severity=local_severity,
+            entities_identified=list(state.get("entities", [])),
+            relations=list(relations),
+            reasoning_snapshot=snapshot,
         )
 
 
