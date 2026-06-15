@@ -83,7 +83,7 @@ async def analyze_event(
 
         ticker_symbol = entity.ticker_symbols.split(",")[0].strip() if entity.ticker_symbols else None
 
-        result = ai_service.analyze(
+        result = await ai_service.analyze(
             event_title=event.title,
             event_description=event.description,
             event_type=event_type,
@@ -97,21 +97,16 @@ async def analyze_event(
         signal_create = result.to_signal_create(event_id, entity.id)
         signal = await signal_service.create(signal_create)
 
-        # Enrich with knowledge graph if entity has a ticker
         if ticker_symbol:
             kg = await analyze_stock_knowledge_graph(ticker_symbol)
-            if kg:
-                kg_entities = kg.get("entities", [])
-                kg_nodes = kg.get("graph_nodes", [])
-                kg_edges = kg.get("graph_edges", [])
-                kg_news = kg.get("news", [])
+            if kg.news:
                 enrichment = (
                     f" [Knowledge Graph] Live news analysis for {ticker_symbol}: "
-                    f"{len(kg_news)} articles, "
-                    f"{len(kg_entities)} entities "
-                    f"({', '.join(e['entity'] for e in kg_entities[:5])}), "
-                    f"{len(kg_nodes)} graph nodes, "
-                    f"{len(kg_edges)} relationships."
+                    f"{len(kg.news)} articles, "
+                    f"{len(kg.entities)} entities "
+                    f"({', '.join(e.entity for e in kg.entities[:5])}), "
+                    f"{len(kg.graph_nodes)} graph nodes, "
+                    f"{len(kg.graph_edges)} relationships."
                 )
                 signal = await signal_service.update(
                     signal.id,

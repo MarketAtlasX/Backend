@@ -19,6 +19,10 @@ from app.models.entity import Entity  # noqa: F401
 from app.models.event_entity import EventEntity  # noqa: F401
 from app.models.market_price import MarketPrice  # noqa: F401
 from app.models.signal import Signal  # noqa: F401
+from app.models.country import Country  # noqa: F401
+from app.models.trade_route import TradeRoute  # noqa: F401
+from app.models.military_relation import MilitaryRelation  # noqa: F401
+from app.models.port import Port  # noqa: F401
 
 # ---------------------------------------------------------------------------
 # Alembic configuration

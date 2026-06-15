@@ -3,6 +3,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.services.event_service import EventService, get_event_service
+from app.repositories.event_entity import EventEntityRepository
+from app.repositories.event import EventRepository
+from app.repositories.entity import EntityRepository
 from app.schemas.event import EventCreate, EventRead, EventUpdate, EventReadWithEntities
 from app.schemas.pagination import PaginatedResponse
 from app.core.enums import EventType, EventSeverity, EventStatus
@@ -126,10 +129,7 @@ async def link_entity_to_event(
     db: AsyncSession = Depends(get_db),
 ) -> None:
     """Link an existing entity to an existing event."""
-    from app.models.event_entity import EventEntity
-    from app.repositories.event import EventRepository
-    from app.repositories.entity import EntityRepository
-
+    event_entity_repo = EventEntityRepository(db)
     event_repo = EventRepository(db)
     entity_repo = EntityRepository(db)
 
@@ -141,20 +141,13 @@ async def link_entity_to_event(
     if entity is None:
         raise HTTPException(status_code=404, detail="Entity not found")
 
-    from sqlalchemy import select
-
-    existing_query = select(EventEntity).where(
-        EventEntity.event_id == event_id, EventEntity.entity_id == entity_id
-    )
-    result = await db.execute(existing_query)
-    if result.scalars().first() is not None:
+    if await event_entity_repo.link_exists(event_id, entity_id):
         raise HTTPException(
             status_code=409,
             detail="Entity is already linked to this event",
         )
 
-    link = EventEntity(event_id=event_id, entity_id=entity_id)
-    db.add(link)
+    await event_entity_repo.create_link(event_id, entity_id)
     await db.commit()
 
 
@@ -169,20 +162,13 @@ async def unlink_entity_from_event(
     db: AsyncSession = Depends(get_db),
 ) -> None:
     """Remove the link between an entity and an event."""
-    from app.models.event_entity import EventEntity
-    from sqlalchemy import select
+    event_entity_repo = EventEntityRepository(db)
 
-    query = select(EventEntity).where(
-        EventEntity.event_id == event_id, EventEntity.entity_id == entity_id
-    )
-    result = await db.execute(query)
-    link = result.scalars().first()
-
-    if link is None:
+    deleted = await event_entity_repo.delete_link(event_id, entity_id)
+    if not deleted:
         raise HTTPException(
             status_code=404,
             detail="Entity is not linked to this event",
         )
 
-    await db.delete(link)
     await db.commit()

@@ -1,12 +1,40 @@
 from decimal import Decimal
 from typing import Optional
 
-from market_agents.impact.impact_agent import ImpactAgent
-from market_agents.market_data.market_data_agent import MarketDataAgent
-from market_agents.recommendation.recommendation_agent import RecommendationAgent
-
 from app.core.enums import SignalType
 from app.schemas.signal import SignalCreate
+from app.services.market_agents_client import market_agents_client
+
+
+def _get_market_snapshot(
+    price_history: list[float] | None,
+    ticker_symbol: str | None,
+) -> dict:
+    """Get market data snapshot — lazily imports MarketDataAgent to avoid
+    a hard dependency on the market_agents package at import time."""
+    if price_history and len(price_history) >= 5:
+        try:
+            from market_agents.market_data.market_data_agent import MarketDataAgent  # type: ignore[import-untyped]
+            agent = MarketDataAgent(prices=price_history)
+            return agent.snapshot()
+        except ImportError:
+            pass
+    elif ticker_symbol:
+        try:
+            from market_agents.market_data.market_data_agent import MarketDataAgent  # type: ignore[import-untyped]
+            agent = MarketDataAgent.from_yfinance(ticker_symbol)
+            return agent.snapshot()
+        except ImportError:
+            pass
+    return {"momentum": 0.0, "volatility": 0.0, "volume": "unknown"}
+
+
+_SIGNAL_MAP = {
+    "buy": SignalType.BUY,
+    "sell": SignalType.SELL,
+    "hold": SignalType.HOLD,
+    "short": SignalType.SHORT,
+}
 
 
 class AIAnalysisResult:
@@ -46,19 +74,11 @@ class AIAnalysisResult:
         )
 
 
-_SIGNAL_MAP = {
-    "BUY": SignalType.BUY,
-    "SELL": SignalType.SELL,
-    "HOLD": SignalType.HOLD,
-}
-
-
 class AIService:
     def __init__(self):
-        self._impact_agent = ImpactAgent()
-        self._rec_agent = RecommendationAgent()
+        pass
 
-    def analyze(
+    async def analyze(
         self,
         event_title: str,
         event_description: str,
@@ -71,59 +91,72 @@ class AIService:
     ) -> AIAnalysisResult:
         text = f"{event_title}. {event_description}"
 
-        state = {"text": text}
-        state = self._impact_agent.ingest(state)
-        state = self._impact_agent.extract(state)
-        state = self._impact_agent.store(state)
-        state = self._impact_agent.propagate(state)
-        state = self._impact_agent.output(state)
+        snapshot = _get_market_snapshot(price_history, ticker_symbol)
 
-        composite_risk = state.get("composite_risk", 0.0)
-        local_severity = state.get("local_severity", 0.0)
-        relations = state.get("relations", [])
+        raw = await market_agents_client.analyze(
+            event_title=event_title,
+            event_description=event_description,
+            event_type=event_type,
+            severity=severity,
+            entity_name=entity_name,
+            ticker_symbol=ticker_symbol,
+            current_price=current_price,
+            price_history=price_history,
+        )
 
-        if price_history and len(price_history) >= 5:
-            market_agent = MarketDataAgent(prices=price_history)
-            snapshot = market_agent.snapshot()
-        elif ticker_symbol:
-            market_agent = MarketDataAgent.from_yfinance(ticker_symbol)
-            snapshot = market_agent.snapshot()
-        else:
-            snapshot = {"momentum": 0.0, "volatility": 0.0, "volume": "unknown"}
+        signal_type = _SIGNAL_MAP.get(raw.get("signal_type", "hold"), SignalType.HOLD)
+        confidence = Decimal(str(raw.get("confidence", 0.5)))
+        reasoning = raw.get("reasoning", "")
 
-        impact_data = {
-            "composite_risk": composite_risk,
-            "local_severity": local_severity,
-            "graph_summary": state.get("graph_summary", {}),
-        }
-        decision = self._rec_agent.decide(impact_data, snapshot)
+        composite_risk = raw.get("composite_risk", 0.0)
+        local_severity = raw.get("local_severity", 0.0)
+        entities_identified = raw.get("entities_identified", [])
+        relations_raw = raw.get("relations", [])
 
-        action = decision.get("action", "HOLD")
-        rec_reason = decision.get("reason", "neutral")
-        signal_type = _SIGNAL_MAP.get(action, SignalType.HOLD)
+        relations = []
+        for r in relations_raw:
+            if isinstance(r, list) and len(r) >= 3:
+                relations.append((str(r[0]), str(r[1]), str(r[2])))
+            elif isinstance(r, dict):
+                relations.append(
+                    (str(r.get("source", "")), str(r.get("label", "")), str(r.get("target", "")))
+                )
 
-        if composite_risk > 0:
-            base_confidence = composite_risk if signal_type == SignalType.SELL else (1 - composite_risk)
-        elif local_severity > 0:
-            base_confidence = local_severity
-        else:
-            base_confidence = 0.5
+        target_price = None
+        stop_loss = None
+        if raw.get("target_price"):
+            try:
+                target_price = Decimal(str(raw["target_price"]))
+            except Exception:
+                target_price = None
+        if raw.get("stop_loss"):
+            try:
+                stop_loss = Decimal(str(raw["stop_loss"]))
+            except Exception:
+                stop_loss = None
 
-        base_confidence = max(0.1, min(0.95, base_confidence))
-        confidence = Decimal(str(round(base_confidence, 2)))
+        if target_price is None and current_price is not None:
+            if signal_type in (SignalType.BUY, SignalType.SELL):
+                price = current_price
+                if signal_type == SignalType.BUY:
+                    target_price = (price * Decimal("1.15")).quantize(Decimal("0.01"))
+                    stop_loss = (price * Decimal("0.93")).quantize(Decimal("0.01"))
+                else:
+                    target_price = (price * Decimal("0.85")).quantize(Decimal("0.01"))
+                    stop_loss = (price * Decimal("1.07")).quantize(Decimal("0.01"))
 
         reasoning_parts = [
             f"MarketAtlas analysis of '{event_title}' for {entity_name}.",
-            f"Recommendation: {action} ({rec_reason}).",
+            f"Recommendation: {signal_type.value.upper()}.",
             f"Composite risk: {composite_risk:.2f}, local severity: {local_severity:.2f}.",
         ]
-        if snapshot["volume"] != "unknown":
+        if snapshot.get("volume", "unknown") != "unknown":
             reasoning_parts.append(
                 f"Market momentum: {snapshot['momentum']:.4f}, "
                 f"volatility: {snapshot['volatility']:.4f}, "
                 f"volume: {snapshot['volume']}."
             )
-        entities_str = ", ".join(state.get("entities", []))
+        entities_str = ", ".join(entities_identified)
         if entities_str:
             reasoning_parts.append(f"Entities identified: {entities_str}.")
         relations_str = "; ".join(
@@ -131,29 +164,21 @@ class AIService:
         )
         if relations_str:
             reasoning_parts.append(f"Relations: {relations_str}.")
-        reasoning = " ".join(reasoning_parts)
+        full_reasoning = " ".join(reasoning_parts)
 
-        target_price = None
-        stop_loss = None
-        if current_price is not None and signal_type in (SignalType.BUY, SignalType.SELL):
-            price = current_price
-            if signal_type == SignalType.BUY:
-                target_price = (price * Decimal("1.15")).quantize(Decimal("0.01"))
-                stop_loss = (price * Decimal("0.93")).quantize(Decimal("0.01"))
-            else:
-                target_price = (price * Decimal("0.85")).quantize(Decimal("0.01"))
-                stop_loss = (price * Decimal("1.07")).quantize(Decimal("0.01"))
+        if reasoning:
+            full_reasoning = reasoning + " " + full_reasoning
 
         return AIAnalysisResult(
             signal_type=signal_type,
             confidence=confidence,
-            reasoning=reasoning,
+            reasoning=full_reasoning,
             target_price=target_price,
             stop_loss=stop_loss,
             composite_risk=composite_risk,
             local_severity=local_severity,
-            entities_identified=list(state.get("entities", [])),
-            relations=list(relations),
+            entities_identified=entities_identified,
+            relations=relations,
             reasoning_snapshot=snapshot,
         )
 

@@ -48,8 +48,18 @@ class MarketDataService:
         if df.empty:
             raise ValueError(f"No price data returned for ticker '{ticker}'")
 
+        import math
+
         records: list[MarketPriceCreate] = []
         for index, row in df.iterrows():
+            open_val = float(row["Open"])
+            high_val = float(row["High"])
+            low_val = float(row["Low"])
+            close_val = float(row["Close"])
+
+            if any(math.isnan(v) for v in [open_val, high_val, low_val, close_val]):
+                continue
+
             pd_timestamp = index
             if hasattr(pd_timestamp, "to_pydatetime"):
                 price_date = pd_timestamp.to_pydatetime()
@@ -61,10 +71,10 @@ class MarketDataService:
             records.append(
                 MarketPriceCreate(
                     entity_id=entity_id,
-                    open_price=Decimal(str(round(float(row["Open"]), 2))),
-                    high_price=Decimal(str(round(float(row["High"]), 2))),
-                    low_price=Decimal(str(round(float(row["Low"]), 2))),
-                    close_price=Decimal(str(round(float(row["Close"]), 2))),
+                    open_price=Decimal(str(round(open_val, 2))),
+                    high_price=Decimal(str(round(high_val, 2))),
+                    low_price=Decimal(str(round(low_val, 2))),
+                    close_price=Decimal(str(round(close_val, 2))),
                     volume=int(row["Volume"]),
                     price_date=price_date,
                     source="yfinance",

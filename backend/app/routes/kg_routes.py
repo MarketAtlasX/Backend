@@ -61,11 +61,11 @@ async def get_knowledge_graph(
             event_id=event_id,
             ticker=ticker,
             entity_name=entity.name,
-            news_count=len(kg["news"]) if kg else 0,
-            entities_count=len(kg["entities"]) if kg else 0,
-            graph_nodes_count=len(kg["graph_nodes"]) if kg else 0,
-            graph_edges_count=len(kg["graph_edges"]) if kg else 0,
-            knowledge_graph=kg,
+            news_count=len(kg.news),
+            entities_count=len(kg.entities),
+            graph_nodes_count=len(kg.graph_nodes),
+            graph_edges_count=len(kg.graph_edges),
+            knowledge_graph=kg.model_dump(),
         )
 
     raise HTTPException(

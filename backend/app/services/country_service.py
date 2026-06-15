@@ -10,12 +10,13 @@ from app.models.entity import Entity
 from app.models.event import Event
 from app.models.event_entity import EventEntity
 from app.models.market_price import MarketPrice
+from app.schemas.knowledge_graph import KGResponse
 from app.services.kg_service import analyze_country_knowledge_graph
 
 
 async def get_country_overview(country_id: int, db: AsyncSession) -> dict[str, Any]:
     """Return core country data instantly — events, companies, prices.
-    
+
     KG agent news/graph data is NOT included here (it's slow).
     Call get_country_kg_news separately for the news & graph layer.
     """
@@ -126,21 +127,19 @@ def _generate_events_from_graph(country: Entity, edges: list[dict]) -> list[dict
     return events[:10]
 
 
-def _parse_kg_result(kg: dict | None) -> tuple[list[dict], list[dict], list[dict]]:
-    if kg is None:
-        return [], [], []
+def _parse_kg_result(kg: KGResponse) -> tuple[list[dict], list[dict], list[dict]]:
     news = [
         {
-            "title": a.get("title", ""),
-            "content": a.get("content", ""),
-            "source": a.get("source", ""),
-            "date": a.get("date", ""),
-            "url": a.get("url", ""),
+            "title": item.title,
+            "content": item.content,
+            "source": item.source,
+            "date": item.date,
+            "url": item.url,
         }
-        for a in (kg.get("news") or [])
+        for item in kg.news
     ][:10]
-    nodes = kg.get("graph_nodes") or []
-    edges = kg.get("graph_edges") or []
+    nodes = [{"id": n.id, "label": n.label, "type": n.type} for n in kg.graph_nodes]
+    edges = [{"source": e.source, "target": e.target, "relationship": e.relationship} for e in kg.graph_edges]
     return news, nodes, edges
 
 

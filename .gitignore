@@ -1,0 +1,7 @@
+venv/
+*.code-workspace
+__pycache__/
+*.py[cod]
+.env
+celerybeat-schedule.db
+.DS_Store

@@ -1,9 +1,16 @@
+import asyncio
+import logging
+
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from sqlalchemy import text
 
 from app.config import settings
-from app.database import close_db
+from app.database import close_db, AsyncSessionLocal
+from app.cache import cache
+from app.middleware import RequestLoggingMiddleware, MetricsMiddleware
+from app.middleware.ratelimit import RateLimitMiddleware
 from app.routes import (
     event_router,
     entity_router,
@@ -13,7 +20,14 @@ from app.routes import (
     kg_router,
     analyze_router,
     country_router,
+    dashboard_router,
+    globe_router,
+    ws_router,
 )
+from app.services.event_broadcaster import EventBroadcaster
+from app.services.market_stream_service import MarketStreamService
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -21,11 +35,39 @@ async def lifespan(app: FastAPI):
     """
     FastAPI lifespan context manager.
 
-    Startup:  nothing — schema management is Alembic's responsibility, not
-              the application's. Run `alembic upgrade head` before starting.
-    Shutdown: dispose the async connection pool cleanly.
+    Startup:
+      - Connect Redis cache.
+      - Start real-time market streaming via Yahoo Finance WebSocket.
+      - Geopolitical events are fetched by Celery Beat every 15 min via KG agent.
+    Shutdown:
+      - Stop streaming services.
+      - Close Redis and DB connections.
     """
+    await cache.connect()
+
+    broadcaster = EventBroadcaster()
+    app.state.broadcaster = broadcaster
+    from app.services.event_broadcaster import set_broadcaster
+    set_broadcaster(broadcaster)
+
+    stream_tasks = []
+
+    market_stream = MarketStreamService(broadcaster)
+    stream_tasks.append(asyncio.create_task(market_stream.run(), name="market-stream"))
+
+    logger.info(
+        "MarketAtlas v%s started (workers=%s, streaming=%d)",
+        settings.api_version,
+        "enabled" if settings.enable_workers else "disabled",
+        len(stream_tasks),
+    )
     yield
+
+    for task in stream_tasks:
+        task.cancel()
+    await asyncio.gather(*stream_tasks, return_exceptions=True)
+
+    await cache.close()
     await close_db()
 
 
@@ -36,6 +78,11 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Register middleware (order matters: outermost first)
+app.add_middleware(RateLimitMiddleware, max_requests=200, window_seconds=60)
+app.add_middleware(RequestLoggingMiddleware)
+app.add_middleware(MetricsMiddleware)
+
 # Include all routers
 app.include_router(event_router)
 app.include_router(entity_router)
@@ -45,13 +92,31 @@ app.include_router(analysis_router)
 app.include_router(kg_router)
 app.include_router(analyze_router)
 app.include_router(country_router)
+app.include_router(dashboard_router)
+app.include_router(globe_router)
+app.include_router(ws_router)
 
 
 @app.get("/health")
 async def health_check() -> dict:
-    """Health check endpoint."""
+    """Deep health check — verifies DB connectivity and service status."""
+    db_ok = False
+    try:
+        async with AsyncSessionLocal() as session:
+            await session.execute(text("SELECT 1"))
+            db_ok = True
+    except Exception:
+        pass
+
+    redis_ok = cache._redis is not None
+
     return {
-        "status": "healthy",
+        "status": "healthy" if db_ok else "degraded",
         "service": "MarketAtlas",
         "version": settings.api_version,
+        "checks": {
+            "database": "ok" if db_ok else "down",
+            "redis": "ok" if redis_ok else "unavailable",
+            "workers": "enabled" if settings.enable_workers else "disabled",
+        },
     }

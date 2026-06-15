@@ -95,14 +95,15 @@ Fetches historical price data from Yahoo Finance for the entity's ticker symbol 
 
 | Method | Path | Description |
 |--------|------|-------------|
-| POST   | `/events/{event_id}/analyze` | **Run AI analysis on event** |
+| POST   | `/events/{event_id}/analyze` | **Run AI analysis on event** (async) |
 
 ### POST /events/{event_id}/analyze
 Triggers the end-to-end Event → AI → Signal pipeline:
 1. Fetches the event
-2. For each linked entity (or specified entity_ids), runs mock AI analysis
-3. Generates and stores trading signals
-4. Returns the event with generated signals
+2. For each linked entity (or specified entity_ids), calls market_agents HTTP gateway
+3. Optionally enriches with knowledge graph data (news, entities, relationships)
+4. Generates and stores trading signals
+5. Returns the event with generated signals
 
 **Request Body (optional):**
 ```json
@@ -124,13 +125,102 @@ If omitted, analyzes all entities linked to the event.
 - **400** if no entities linked (and none provided)
 - **404** if event not found
 
-## 6. Health
+## 6. Free-text Analysis
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET    | `/health` | Health check |
+| POST   | `/analyze` | **Ad-hoc sentiment analysis** |
 
-**Response:** `{"status": "healthy", "service": "MarketAtlas", "version": "1.0.0"}`
+### POST /analyze
+Analyzes free text (e.g., "Market sentiment for AAPL") and returns snapshot, impact assessment, and recommendation. Optionally enriched with KG data.
+
+**Request:**
+```json
+{
+  "text": "Market sentiment for AAPL"
+}
+```
+
+**Response:**
+```json
+{
+  "snapshot": { "symbol": "AAPL", "momentum": 0.0, "volatility": 0.0, "volume_status": "unknown" },
+  "impact": { "composite_risk": 0.0, "local_severity": 0.0, "entity_count": 0, "relations": [] },
+  "recommendation": { "action": "HOLD", "reason": "...", "confidence": 0.5 }
+}
+```
+
+## 7. Knowledge Graph
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST   | `/events/{event_id}/knowledge-graph` | **Get KG enrichment for event** |
+
+### POST /events/{event_id}/knowledge-graph
+Fetches news, entities, and graph data from the KG agent for the first entity linked to the event that has a ticker symbol.
+
+**Query Parameters:**
+- `entity_id` (optional): Specific entity to analyze
+
+**Response:**
+```json
+{
+  "event_id": 1,
+  "ticker": "AAPL",
+  "entity_name": "Apple Inc",
+  "news_count": 5,
+  "entities_count": 10,
+  "graph_nodes_count": 8,
+  "graph_edges_count": 12,
+  "knowledge_graph": { "news": [...], "entities": [...], "graph_nodes": [...], "graph_edges": [...] }
+}
+```
+
+## 8. Countries
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET    | `/countries/{id}/overview` | Country dashboard (events, companies, prices) |
+| GET    | `/countries/{id}/news` | Country KG news + graph data |
+
+## 9. Dashboard
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET    | `/dashboard/summary` | Aggregated platform statistics |
+
+### GET /dashboard/summary
+```json
+{
+  "total_events": 150,
+  "total_entities": 32,
+  "total_signals": 89,
+  "active_signals": 12,
+  "countries": 10,
+  "companies": 18
+}
+```
+
+## 10. Health & Metrics
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET    | `/health` | Deep health check |
+| GET    | `/metrics` | Prometheus metrics (if enabled) |
+
+### GET /health
+```json
+{
+  "status": "healthy",
+  "service": "MarketAtlas",
+  "version": "1.0.0",
+  "checks": {
+    "database": "ok",
+    "redis": "ok",
+    "workers": "enabled"
+  }
+}
+```
 
 ---
 
@@ -148,6 +238,7 @@ Common status codes:
 - **404** Resource not found
 - **409** Conflict (duplicate name, duplicate market price, already linked)
 - **422** Validation error (Pydantic schema fields)
+- **429** Too Many Requests (rate limit exceeded)
 
 ## Pagination
 

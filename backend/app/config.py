@@ -1,5 +1,5 @@
 from typing import Optional
-from pydantic import Field, computed_field, model_validator
+from pydantic import Field, computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -57,6 +57,29 @@ class Settings(BaseSettings):
         default="http://localhost:8005",
         alias="KG_AGENT_URL",
         description="Base URL of the knowledge-graph-agent service",
+    )
+
+    # -------------------------------------------------------------------------
+    # Redis Configuration
+    # -------------------------------------------------------------------------
+    redis_url: str = Field(
+        default="redis://localhost:6379/0",
+        alias="REDIS_URL",
+        description="Redis connection string for caching and Celery broker",
+    )
+
+    # -------------------------------------------------------------------------
+    # Celery Configuration
+    # -------------------------------------------------------------------------
+    celery_broker_url: str = Field(
+        default="redis://localhost:6379/0",
+        alias="CELERY_BROKER_URL",
+        description="Celery broker URL (Redis)",
+    )
+    celery_result_backend: str = Field(
+        default="redis://localhost:6379/1",
+        alias="CELERY_RESULT_BACKEND",
+        description="Celery result backend URL (Redis)",
     )
 
     # -------------------------------------------------------------------------

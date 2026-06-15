@@ -4,17 +4,30 @@
 
 MarketAtlas ingests geopolitical and market events, links them to real-world entities (countries, companies, people), fetches market data from Yahoo Finance, and runs a multi-agent AI pipeline to generate actionable trading signals — **Buy, Sell, Hold, or Short**. Optionally enriches signals with knowledge-graph data for deeper context.
 
-## Features
+## Architecture
 
-- **Event Management** — CRUD and filter geopolitical/market events by type, severity, status, or recency
-- **Entity Registry** — Manage countries, companies, people, indices, and commodities with geo-coordinates for globe visualization
-- **Market Data Ingestion** — Fetch historical OHLCV data from Yahoo Finance per entity
-- **AI Trading Signals** — Multi-agent pipeline: `ImpactAgent` → `MarketDataAgent` → `RecommendationAgent` generates signals with confidence scores, reasoning, and price targets
-- **Knowledge Graph Enrichment** — Integrate with an external KG agent for entity extraction, news, and relationship graphs
-- **Country Overview** — Combined dashboard view of country data, events, companies, prices, and KG-derived news
-- **Free-text Analysis** — Ad-hoc market sentiment analysis with automatic ticker extraction
-- **Pagination & Filtering** — All list endpoints support `skip`/`limit` pagination and rich filtering
-- **DB-Level Integrity** — CHECK constraints on all categorical fields, unique constraints, and cascade deletes
+```
+┌──────────────────────────────────────────────────────────────┐
+│                       FastAPI App (port 8000)                 │
+│  ┌──────────┐  ┌──────────┐  ┌──────────────┐               │
+│  │  Routes   │→ │ Services │→ │ Repositories  │→ PostgreSQL  │
+│  │ (10 rtrs) │  │(10 svcs) │  │   (6 repos)   │             │
+│  └──────────┘  └──────────┘  └──────┬───────┘               │
+│                                     │                        │
+│  ┌──────────────────────────────────┘                        │
+│  │  ┌──────────────────┐  ┌──────────────────┐              │
+│  │  │ Market Agents    │  │  KG Service      │  ← Redis     │
+│  │  │ Client (HTTP)    │  │  (HTTP + models) │    Cache     │
+│  │  └────────┬─────────┘  └────────┬─────────┘              │
+│  └───────────┼──────────────────────┼────────────────────────┘
+│              │                      │                        │
+│  Middleware: │ Logging │ Metrics │ Rate Limit │              │
+└──────────────┼──────────────────────┼────────────────────────┘
+               │                      │
+               ▼                      ▼
+      market_agents (8004)    knowledge-graph-agent (8005)
+      (HTTP gateway)         (news, entities, relationships)
+```
 
 ## Tech Stack
 
@@ -28,35 +41,14 @@ MarketAtlas ingests geopolitical and market events, links them to real-world ent
 | Migrations | Alembic |
 | Validation | Pydantic v2 |
 | Market Data | `yfinance` (Yahoo Finance) |
-| AI Agents | `market_agents` (ImpactAgent, MarketDataAgent, RecommendationAgent) |
+| AI Agents | `market_agents` (HTTP gateway on port 8004) |
+| Knowledge Graph | `knowledge-graph-agent` (HTTP gateway on port 8005) |
 | Task Queue | Celery (Redis broker) |
-| Caching | Redis |
+| Caching | Redis (async via `redis-py`) |
 | HTTP Client | `httpx` |
-| Testing | pytest + pytest-asyncio |
-
-## Architecture
-
-```
-┌─────────────────────────────────────────────────┐
-│                   FastAPI App                    │
-│  ┌──────────┐  ┌──────────┐  ┌──────────────┐  │
-│  │  Routes   │→ │ Services │→ │ Repositories  │  │
-│  │ (handlers)│  │(business)│  │  (data access)│  │
-│  └──────────┘  └──────────┘  └──────┬───────┘  │
-│                                     │           │
-│  ┌──────────────────────────────────┘           │
-│  │  ┌──────────────┐  ┌──────────────────┐     │
-│  │  │ AI Service   │  │  KG Service      │     │
-│  │  │(market_agents│  │(knowledge-graph) │     │
-│  │  │  gateway)    │  │  agent service   │     │
-│  │  └──────────────┘  └──────────────────┘     │
-│  └─────────────────────────────────────────────┘
-                        │
-              ┌─────────┴──────────┐
-              ▼                    ▼
-         PostgreSQL           Redis
-       (5 tables)         (Celery broker)
-```
+| Observability | Prometheus metrics, structured logging |
+| Rate Limiting | In-memory token bucket |
+| Testing | pytest + pytest-asyncio + httpx |
 
 ## API Overview
 
@@ -70,9 +62,11 @@ MarketAtlas ingests geopolitical and market events, links them to real-world ent
 | Free-text | `/analyze` | Ad-hoc sentiment analysis |
 | Knowledge Graph | `/events/{id}/knowledge-graph` | KG enrichment |
 | Countries | `/countries/{id}` | Overview + news dashboard |
-| Health | `/health` | Health check |
+| Dashboard | `/dashboard/summary` | Aggregated platform statistics |
+| Health | `/health` | Deep health check (DB, Redis) |
+| Metrics | `/metrics` | Prometheus metrics endpoint |
 
-Full API documentation at `http://localhost:8000/docs` (Swagger UI) or `http://localhost:8000/redoc` (ReDoc).
+Full API documentation at `http://localhost:8000/docs` (Swagger UI).
 
 ## Database Schema
 
@@ -84,13 +78,56 @@ Full API documentation at `http://localhost:8000/docs` (Swagger UI) or `http://l
 | `market_prices` | OHLCV price data per entity per date |
 | `signals` | AI-generated trading signals with confidence, reasoning, targets, and PnL |
 
+## Project Structure
+
+```
+backend/
+├── app/
+│   ├── main.py                    # FastAPI app with middleware + lifespan
+│   ├── config.py                  # Pydantic settings (env-based)
+│   ├── database.py                # Async SQLAlchemy engine + session
+│   ├── cache.py                   # Redis caching layer
+│   ├── core/
+│   │   └── enums.py               # StrEnum for all categorical fields
+│   ├── models/                    # SQLAlchemy ORM models (5 tables)
+│   ├── schemas/                   # Pydantic request/response models
+│   │   └── knowledge_graph.py     # Typed KG response models
+│   ├── repositories/              # Data access layer (6 repos)
+│   │   └── event_entity.py        # Junction table repository
+│   ├── services/                  # Business logic layer
+│   │   ├── ai_service.py          # AI analysis (uses HTTP client)
+│   │   ├── market_agents_client.py # HTTP client for market_agents
+│   │   ├── kg_service.py          # Typed KG agent HTTP client
+│   │   └── ...
+│   ├── routes/                    # API route handlers (10 routers)
+│   │   └── dashboard.py           # Aggregated stats endpoint
+│   ├── middleware/                 # Observability middleware
+│   │   ├── logging.py             # Structured request logging
+│   │   ├── metrics.py             # Prometheus metrics
+│   │   └── ratelimit.py           # In-memory rate limiting
+│   └── workers/                   # Celery background tasks
+│       ├── celery_app.py          # Celery app configuration
+│       ├── analysis_tasks.py      # Async AI analysis tasks
+│       └── market_data_tasks.py   # Async yfinance fetch tasks
+├── alembic/                       # Database migrations
+├── tests/                         # Test suite (pytest)
+│   ├── conftest.py                # Async fixtures with test DB
+│   ├── test_routes/               # Route tests
+│   ├── test_services/             # Service tests
+│   └── test_repositories/         # Repository tests
+├── scripts/                       # Utility scripts
+├── Dockerfile                     # Production Docker image
+├── docker-compose.yml             # Multi-service orchestration
+└── requirements.txt
+```
+
 ## Quick Start
 
 ### Prerequisites
 
 - Python 3.11+
 - PostgreSQL
-- Redis (optional, for Celery)
+- Redis (optional, for caching + Celery)
 
 ### Setup
 
@@ -122,6 +159,16 @@ uvicorn app.main:app --reload --port 8000
 
 The API will be available at `http://localhost:8000`.
 
+### Background Workers
+
+```bash
+# Start Celery worker (in a separate terminal)
+celery -A app.workers.celery_app worker --loglevel=info
+
+# Trigger async analysis
+# (task is available but requires ENABLE_WORKERS=True)
+```
+
 ### Environment Variables
 
 | Variable | Default | Description |
@@ -132,34 +179,33 @@ The API will be available at `http://localhost:8000`.
 | `DB_PASSWORD` | *(required)* | PostgreSQL password |
 | `DB_NAME` | `marketatlas` | Database name |
 | `REDIS_URL` | `redis://localhost:6379/0` | Redis connection |
+| `CELERY_BROKER_URL` | `redis://localhost:6379/0` | Celery broker |
+| `CELERY_RESULT_BACKEND` | `redis://localhost:6379/1` | Celery results |
 | `MARKET_AGENTS_URL` | `http://localhost:8004` | AI agents gateway |
 | `KG_AGENT_URL` | `http://localhost:8005` | Knowledge graph agent |
 | `ENABLE_WORKERS` | `False` | Feature flag for Celery |
 
-See `backend/.env.example` for all options.
-
 ## External Dependencies
 
-- **[market_agents](https://github.com/MarketAtlasX/market_agents)** — AI agent gateway (ImpactAgent, MarketDataAgent, RecommendationAgent). Runs on port 8004.
-- **[knowledge-graph-agent](https://github.com/MarketAtlasX/knowledge-graph-agent)** — News scraping, entity extraction, and relationship graphs. Runs on port 8005.
+- **[market_agents](https://github.com/MarketAtlasX/market_agents)** — AI agent gateway (ImpactAgent, MarketDataAgent, RecommendationAgent). Runs on port 8004. Called via HTTP.
+- **[knowledge-graph-agent](https://github.com/MarketAtlasX/knowledge-graph-agent)** — News scraping, entity extraction, and relationship graphs. Runs on port 8005. Called via HTTP.
 
-## Deployment
-
-```bash
-# Production
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
-```
-
-Docker support is planned (Dockerfile and docker-compose.yml stubs are in place).
-
-## Development
+## Testing
 
 ```bash
-# Run tests (once written)
+# Run all tests
 pytest
 
-# Clean test data
-python scripts/clean_test_data.py
+# Run with coverage
+pytest --cov=app
+
+# Run specific test file
+pytest tests/test_routes/test_events.py
 ```
 
+## Observability
 
+- **Metrics**: `GET /metrics` exposes Prometheus metrics
+- **Logging**: Structured JSON request logs with request IDs
+- **Health**: `GET /health` deep-checks DB and Redis connectivity
+- **Rate Limiting**: 200 requests/minute per IP (configurable)

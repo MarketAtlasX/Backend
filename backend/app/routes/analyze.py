@@ -55,7 +55,7 @@ async def analyze_text(body: AnalyzeTextRequest) -> AnalyzeTextResponse:
 
     ticker = _extract_ticker(text)
 
-    result = ai_service.analyze(
+    result = await ai_service.analyze(
         event_title="Market sentiment analysis",
         event_description=text,
         event_type="other",
@@ -64,11 +64,7 @@ async def analyze_text(body: AnalyzeTextRequest) -> AnalyzeTextResponse:
         ticker_symbol=ticker,
     )
 
-    kg = None
-    if ticker:
-        kg = await analyze_stock_knowledge_graph(ticker)
-
-    kg_entities = kg.get("entities", []) if kg else []
+    kg = await analyze_stock_knowledge_graph(ticker) if ticker else None
 
     snapshot = Snapshot(
         symbol=ticker or "UNKNOWN",
@@ -80,7 +76,7 @@ async def analyze_text(body: AnalyzeTextRequest) -> AnalyzeTextResponse:
     impact = Impact(
         composite_risk=result.composite_risk,
         local_severity=result.local_severity,
-        entity_count=len(result.entities_identified) + len(kg_entities),
+        entity_count=len(result.entities_identified) + (len(kg.entities) if kg else 0),
         relations=[
             Relation(source=s, target=t, label=l)
             for s, t, l in result.relations[:10]

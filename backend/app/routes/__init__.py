@@ -7,6 +7,9 @@ from app.routes.ai_routes import router as analysis_router
 from app.routes.kg_routes import router as kg_router
 from app.routes.analyze import router as analyze_router
 from app.routes.country import router as country_router
+from app.routes.dashboard import router as dashboard_router
+from app.routes.globe_routes import router as globe_router
+from app.routes.ws import ws_router
 
 __all__ = [
     "event_router",
@@ -17,4 +20,7 @@ __all__ = [
     "kg_router",
     "analyze_router",
     "country_router",
+    "dashboard_router",
+    "globe_router",
+    "ws_router",
 ]

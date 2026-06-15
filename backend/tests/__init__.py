@@ -1,0 +1,1 @@
+"""MarketAtlas test suite."""

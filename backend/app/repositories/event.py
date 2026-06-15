@@ -7,6 +7,7 @@ from sqlalchemy.orm import selectinload
 
 from app.models.event import Event
 from app.repositories.base import BaseRepository
+from app.repositories.event_entity import EventEntityRepository
 
 
 class EventRepository(BaseRepository[Event]):
@@ -113,6 +114,12 @@ class EventRepository(BaseRepository[Event]):
     async def count_by_status(self, status: str) -> int:
         """Count events matching a specific status."""
         return await self.count_where(self.model.status == status)
+
+    async def get_by_source_url(self, source_url: str) -> Optional[Event]:
+        """Check if an event with the given source_url already exists (dedup)."""
+        query = select(self.model).where(self.model.source_url == source_url)
+        result = await self.session.execute(query)
+        return result.scalars().first()
 
     async def count_recent(self, days: int = 7) -> int:
         """Count events within the last N days."""
