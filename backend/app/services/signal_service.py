@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models.signal import Signal
 from app.repositories.signal import SignalRepository
+from app.services.event_broadcaster import get_broadcaster
 from app.repositories.event import EventRepository
 from app.repositories.entity import EntityRepository
 from app.schemas.signal import SignalCreate, SignalUpdate
@@ -65,6 +66,14 @@ class SignalService:
         signal = await self._repo.create(data.model_dump())
         await self._session.commit()
         await self._session.refresh(signal)
+        await get_broadcaster().broadcast_signal({
+            "id": signal.id,
+            "event_id": signal.event_id,
+            "entity_id": signal.entity_id,
+            "signal_type": signal.signal_type,
+            "confidence": float(signal.confidence),
+            "reasoning": signal.reasoning,
+        })
         return signal
 
     async def update(self, signal_id: int, data: SignalUpdate) -> Signal:

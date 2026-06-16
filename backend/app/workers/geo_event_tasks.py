@@ -4,10 +4,10 @@ Fetches live news from the Knowledge Graph agent microservice and creates
 structured Event records in the database, then auto-triggers AI analysis.
 """
 
-import asyncio
 import logging
 
 from app.workers.celery_app import celery_app
+from app.workers import _run_async
 
 logger = logging.getLogger(__name__)
 
@@ -44,14 +44,6 @@ COUNTRIES_WITHOUT_TICKERS: list[tuple[str, int]] = [
     ("Germany", 38),
     ("France", 39),
 ]
-
-
-def _run_async(coro):
-    loop = asyncio.new_event_loop()
-    try:
-        return loop.run_until_complete(coro)
-    finally:
-        loop.close()
 
 
 @celery_app.task(bind=True, max_retries=2, default_retry_delay=120)

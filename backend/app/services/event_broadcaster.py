@@ -1,7 +1,8 @@
-"""Async pub/sub service for real-time event broadcasting to WebSocket clients."""
+"""WebSocket event broadcaster with channel-based pub/sub."""
 
 import asyncio
 import logging
+from collections import defaultdict
 from datetime import datetime
 from typing import Any
 
@@ -9,41 +10,55 @@ logger = logging.getLogger(__name__)
 
 
 class EventBroadcaster:
-    """In-memory pub/sub. Each WebSocket client subscribes via an asyncio.Queue."""
+    """Channel-based pub/sub for WebSocket clients."""
 
     def __init__(self) -> None:
-        self._subscribers: list[asyncio.Queue] = []
-        self._lock = asyncio.Lock()
+        self._subscriptions: dict[str, set[asyncio.Queue]] = defaultdict(set)
 
-    async def subscribe(self) -> asyncio.Queue:
-        q: asyncio.Queue = asyncio.Queue(maxsize=256)
-        async with self._lock:
-            self._subscribers.append(q)
-        return q
+    def subscribe(self, channel: str) -> asyncio.Queue:
+        queue: asyncio.Queue = asyncio.Queue(maxsize=100)
+        self._subscriptions[channel].add(queue)
+        return queue
 
-    async def unsubscribe(self, q: asyncio.Queue) -> None:
-        async with self._lock:
+    def unsubscribe(self, channel: str, queue: asyncio.Queue) -> None:
+        self._subscriptions[channel].discard(queue)
+
+    async def broadcast(self, channel: str, message: dict[str, Any]) -> None:
+        if channel not in self._subscriptions:
+            return
+        dead: list[asyncio.Queue] = []
+        for queue in self._subscriptions[channel]:
             try:
-                self._subscribers.remove(q)
-            except ValueError:
-                pass
+                queue.put_nowait(message)
+            except asyncio.QueueFull:
+                dead.append(queue)
+        for q in dead:
+            self._subscriptions[channel].discard(q)
 
-    async def broadcast(self, event_type: str, data: dict[str, Any]) -> None:
-        message = {
-            "type": event_type,
-            "data": data,
-            "ts": datetime.utcnow().isoformat() + "Z",
-        }
-        async with self._lock:
-            for q in self._subscribers:
-                try:
-                    q.put_nowait(message)
-                except asyncio.QueueFull:
-                    pass
+    async def broadcast_event(self, event_data: dict) -> None:
+        await self.broadcast("events", {
+            "type": "event",
+            "data": event_data,
+            "timestamp": datetime.utcnow().isoformat(),
+        })
+
+    async def broadcast_signal(self, signal_data: dict) -> None:
+        await self.broadcast("signals", {
+            "type": "signal",
+            "data": signal_data,
+            "timestamp": datetime.utcnow().isoformat(),
+        })
+
+    async def broadcast_market_price(self, price_data: dict) -> None:
+        await self.broadcast("market_prices", {
+            "type": "market_price",
+            "data": price_data,
+            "timestamp": datetime.utcnow().isoformat(),
+        })
 
     @property
     def subscriber_count(self) -> int:
-        return len(self._subscribers)
+        return sum(len(qs) for qs in self._subscriptions.values())
 
 
 _broadcaster: EventBroadcaster | None = None
@@ -54,5 +69,8 @@ def set_broadcaster(b: EventBroadcaster) -> None:
     _broadcaster = b
 
 
-def get_broadcaster() -> EventBroadcaster | None:
+def get_broadcaster() -> EventBroadcaster:
+    global _broadcaster
+    if _broadcaster is None:
+        _broadcaster = EventBroadcaster()
     return _broadcaster

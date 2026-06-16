@@ -1,6 +1,6 @@
 """Trade route model — bilateral trade flows between countries."""
 
-from sqlalchemy import String, Float, Integer, ForeignKey
+from sqlalchemy import String, Float, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base

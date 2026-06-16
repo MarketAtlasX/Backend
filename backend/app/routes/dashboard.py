@@ -12,7 +12,6 @@ from app.database import get_db
 from app.models.event import Event
 from app.models.entity import Entity
 from app.models.signal import Signal
-from app.models.market_price import MarketPrice
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 

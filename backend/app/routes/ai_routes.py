@@ -5,7 +5,6 @@ from sqlalchemy.orm import selectinload
 
 from app.database import get_db
 from app.models.event import Event
-from app.models.event_entity import EventEntity
 from app.repositories.event import EventRepository
 from app.repositories.entity import EntityRepository
 from app.repositories.market_price import MarketPriceRepository

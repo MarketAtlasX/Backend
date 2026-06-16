@@ -5,6 +5,7 @@ articles for entities, creates structured Event records in the database,
 and auto-triggers the AI analysis pipeline for each new event.
 """
 
+import asyncio
 import logging
 from datetime import datetime
 from typing import Optional
@@ -122,11 +123,10 @@ class EventIngestionService:
         if b is None:
             return
         for event_id, entity_id in created:
-            import asyncio
             try:
                 loop = asyncio.get_running_loop()
                 if loop.is_running():
-                    loop.create_task(b.broadcast("new_event", {
+                    loop.create_task(b.broadcast_event({
                         "id": event_id,
                         "entity_id": entity_id,
                     }))

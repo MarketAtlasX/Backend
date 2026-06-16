@@ -23,6 +23,7 @@ from app.models.country import Country  # noqa: F401
 from app.models.trade_route import TradeRoute  # noqa: F401
 from app.models.military_relation import MilitaryRelation  # noqa: F401
 from app.models.port import Port  # noqa: F401
+from app.models.user import User  # noqa: F401
 
 # ---------------------------------------------------------------------------
 # Alembic configuration

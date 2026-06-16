@@ -1,6 +1,6 @@
 """Country model — first-class entity matching frontend's Country interface."""
 
-from sqlalchemy import String, Text, Float, Integer
+from sqlalchemy import String, Text, Float
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base

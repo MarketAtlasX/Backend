@@ -40,6 +40,9 @@ class MetricsMiddleware(BaseHTTPMiddleware):
     """Middleware that records Prometheus metrics for each request."""
 
     async def dispatch(self, request: Request, call_next) -> Response:
+        if request.scope.get("type") == "websocket":
+            return await call_next(request)
+
         if request.url.path == "/metrics":
             return Response(
                 content=generate_latest(),

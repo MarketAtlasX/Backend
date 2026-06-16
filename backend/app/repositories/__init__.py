@@ -8,6 +8,7 @@ from app.repositories.country_repository import CountryRepository
 from app.repositories.trade_route_repository import TradeRouteRepository
 from app.repositories.military_relation_repository import MilitaryRelationRepository
 from app.repositories.port_repository import PortRepository
+from app.repositories.raw_event import RawEventRepository
 
 __all__ = [
     "EventRepository",
@@ -19,4 +20,5 @@ __all__ = [
     "TradeRouteRepository",
     "MilitaryRelationRepository",
     "PortRepository",
+    "RawEventRepository",
 ]

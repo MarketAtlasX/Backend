@@ -92,15 +92,7 @@ class GDELTStreamService:
         if event is None:
             return
 
-        await self._broadcaster.broadcast("new_event", {
-            "id": event["id"],
-            "title": event["title"],
-            "event_type": event["event_type"],
-            "severity": event["severity"],
-            "source": event["source"],
-            "source_url": event["source_url"],
-            "event_date": event["event_date"],
-        })
+        await self._broadcaster.broadcast_event(event)
 
     async def _create_event(self, article: dict[str, Any]) -> dict[str, Any] | None:
         from app.database import AsyncSessionLocal

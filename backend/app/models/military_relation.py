@@ -1,6 +1,6 @@
 """Military relation model — alliances, rivalries, conflicts between countries."""
 
-from sqlalchemy import String, Float, Integer
+from sqlalchemy import String, Float
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base

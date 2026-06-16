@@ -1,12 +1,11 @@
-from decimal import Decimal
-from typing import Any
+from typing import Optional
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from app.core.enums import SignalType
 from app.services.ai_service import ai_service
 from app.services.kg_service import analyze_stock_knowledge_graph
+from app.geopolitical.pipeline import run_pipeline
 
 router = APIRouter(tags=["analysis"])
 
@@ -94,6 +93,22 @@ async def analyze_text(body: AnalyzeTextRequest) -> AnalyzeTextResponse:
         impact=impact,
         recommendation=recommendation,
     )
+
+
+class AnalyzeV2Request(BaseModel):
+    text: str = Field(..., min_length=1, description="Query text (e.g. company or geopolitical topic)")
+    ticker: Optional[str] = Field(None, description="Optional stock ticker symbol")
+    price_history: Optional[list[float]] = Field(None, description="Optional price history for market signal")
+
+
+@router.post("/analyze/v2")
+async def analyze_v2(body: AnalyzeV2Request):
+    result = await run_pipeline(
+        query=body.text,
+        ticker=body.ticker,
+        price_history=body.price_history,
+    )
+    return result.model_dump()
 
 
 def _extract_ticker(text: str) -> str | None:

@@ -23,6 +23,9 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
     """Middleware that logs structured request/response data."""
 
     async def dispatch(self, request: Request, call_next) -> Response:
+        if request.scope.get("type") == "websocket":
+            return await call_next(request)
+
         request_id = str(uuid.uuid4())
         request.state.request_id = request_id
 

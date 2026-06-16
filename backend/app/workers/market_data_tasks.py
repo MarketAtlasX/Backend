@@ -4,20 +4,12 @@ Offloads yfinance fetching to background workers so the API doesn't block
 during potentially slow external data retrieval.
 """
 
-import asyncio
 import logging
 
 from app.workers.celery_app import celery_app
+from app.workers import _run_async
 
 logger = logging.getLogger(__name__)
-
-
-def _run_async(coro):
-    loop = asyncio.new_event_loop()
-    try:
-        return loop.run_until_complete(coro)
-    finally:
-        loop.close()
 
 
 @celery_app.task(bind=True, max_retries=3, default_retry_delay=60)

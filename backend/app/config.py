@@ -83,6 +83,14 @@ class Settings(BaseSettings):
     )
 
     # -------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
+    # Auth Configuration
+    # -------------------------------------------------------------------------
+    jwt_secret: str = Field(alias="JWT_SECRET", default="change-me-in-production")
+    jwt_algorithm: str = Field(alias="JWT_ALGORITHM", default="HS256")
+    jwt_expiry_hours: int = Field(alias="JWT_EXPIRY_HOURS", default=24)
+
+    # -------------------------------------------------------------------------
     # Feature Flags
     # -------------------------------------------------------------------------
     enable_workers: bool = Field(default=False, alias="ENABLE_WORKERS")

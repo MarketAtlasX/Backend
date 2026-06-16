@@ -1,9 +1,13 @@
+import logging
 from decimal import Decimal
 from typing import Optional
 
 from app.core.enums import SignalType
 from app.schemas.signal import SignalCreate
 from app.services.market_agents_client import market_agents_client
+from app.geopolitical.pipeline import run_pipeline as unified_run_pipeline
+
+logger = logging.getLogger(__name__)
 
 
 def _get_market_snapshot(
@@ -103,6 +107,30 @@ class AIService:
             current_price=current_price,
             price_history=price_history,
         )
+
+        if not raw or raw.get("confidence", 0) < 0.3:
+            logger.info("market_agents returned low confidence — falling back to unified geopolitical pipeline")
+            try:
+                pipe_result = await unified_run_pipeline(
+                    query=event_title,
+                    ticker=ticker_symbol,
+                    price_history=price_history,
+                )
+                if pipe_result.signal:
+                    raw = {
+                        "signal_type": pipe_result.signal.action.lower(),
+                        "confidence": pipe_result.signal.confidence,
+                        "reasoning": pipe_result.signal.reason,
+                        "target_price": None,
+                        "stop_loss": None,
+                        "composite_risk": pipe_result.impact.composite_risk if pipe_result.impact else 0.0,
+                        "local_severity": pipe_result.impact.local_severity if pipe_result.impact else 0.0,
+                        "entities_identified": [e.name for e in pipe_result.entities],
+                        "relations": [(e.source, e.relation, e.target) for e in pipe_result.graph_edges[:10]],
+                        "reasoning_snapshot": pipe_result.market.model_dump() if pipe_result.market else {},
+                    }
+            except Exception as pipe_err:
+                logger.warning(f"Unified pipeline fallback also failed: {pipe_err}")
 
         signal_type = _SIGNAL_MAP.get(raw.get("signal_type", "hold"), SignalType.HOLD)
         confidence = Decimal(str(raw.get("confidence", 0.5)))

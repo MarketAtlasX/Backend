@@ -53,7 +53,7 @@ class MarketStreamService:
             if entity_id is None:
                 return
 
-            await self._broadcaster.broadcast("market_tick", {
+            await self._broadcaster.broadcast_market_price({
                 "entity_id": entity_id,
                 "ticker": symbol,
                 "price": round(float(price), 2),

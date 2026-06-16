@@ -10,6 +10,7 @@ from app.routes.country import router as country_router
 from app.routes.dashboard import router as dashboard_router
 from app.routes.globe_routes import router as globe_router
 from app.routes.ws import ws_router
+from app.routes.backtest import router as backtest_router
 
 __all__ = [
     "event_router",
@@ -23,4 +24,5 @@ __all__ = [
     "dashboard_router",
     "globe_router",
     "ws_router",
+    "backtest_router",
 ]

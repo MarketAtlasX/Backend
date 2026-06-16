@@ -1,8 +1,9 @@
 """Remove test entities (CountryA, CountryB) and the test event from the database."""
 import asyncio
+import os
 import sys
 sys.path.insert(0, '.')
-sys.path.insert(0, '/Users/divijmazumdar')
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from sqlalchemy import select
 from app.database import AsyncSessionLocal

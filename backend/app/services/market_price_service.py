@@ -1,6 +1,4 @@
 from datetime import datetime
-from decimal import Decimal
-from typing import Optional
 
 from fastapi import Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession

@@ -1,9 +1,10 @@
 """Seed the database with real entities (countries + companies) with known coordinates."""
 
 import asyncio
+import os
 import sys
 sys.path.insert(0, '.')
-sys.path.insert(0, '/Users/divijmazumdar')
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from app.database import AsyncSessionLocal
 from app.models.entity import Entity

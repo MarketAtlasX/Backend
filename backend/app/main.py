@@ -3,7 +3,7 @@ import logging
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import APIRouter, FastAPI
 from sqlalchemy import text
 
 from app.config import settings
@@ -11,6 +11,9 @@ from app.database import close_db, AsyncSessionLocal
 from app.cache import cache
 from app.middleware import RequestLoggingMiddleware, MetricsMiddleware
 from app.middleware.ratelimit import RateLimitMiddleware
+from app.chatbot.api.routes import chat_router
+from app.chatbot.api.websocket import handle_websocket as chat_ws_handler
+from app.routes.auth import router as auth_router
 from app.routes import (
     event_router,
     entity_router,
@@ -23,6 +26,7 @@ from app.routes import (
     dashboard_router,
     globe_router,
     ws_router,
+    backtest_router,
 )
 from app.services.event_broadcaster import EventBroadcaster
 from app.services.market_stream_service import MarketStreamService
@@ -83,21 +87,36 @@ app.add_middleware(RateLimitMiddleware, max_requests=200, window_seconds=60)
 app.add_middleware(RequestLoggingMiddleware)
 app.add_middleware(MetricsMiddleware)
 
-# Include all routers
-app.include_router(event_router)
-app.include_router(entity_router)
-app.include_router(market_price_router)
-app.include_router(signal_router)
-app.include_router(analysis_router)
-app.include_router(kg_router)
-app.include_router(analyze_router)
-app.include_router(country_router)
-app.include_router(dashboard_router)
-app.include_router(globe_router)
+# API v1 group — all data routes under /api/v1 to match frontend proxy
+api_v1_router = APIRouter(prefix="/api/v1")
+api_v1_router.include_router(auth_router)
+api_v1_router.include_router(event_router)
+api_v1_router.include_router(entity_router)
+api_v1_router.include_router(market_price_router)
+api_v1_router.include_router(signal_router)
+api_v1_router.include_router(analysis_router)   # ai_routes with /events prefix
+api_v1_router.include_router(kg_router)          # kg_routes with /events prefix
+api_v1_router.include_router(analyze_router)     # /analyze, /analyze/v2
+api_v1_router.include_router(country_router)
+api_v1_router.include_router(dashboard_router)
+api_v1_router.include_router(globe_router)       # /relations/trade, /relations/military, /ports
+api_v1_router.include_router(backtest_router)
+app.include_router(api_v1_router)
+
+# Chat router already has /api/v1/chat prefix — include at root
+app.include_router(chat_router)
+
+# WebSocket stays at root
 app.include_router(ws_router)
 
 
+@app.websocket("/ws/chat")
+async def chat_websocket(websocket):
+    await chat_ws_handler(websocket)
+
+
 @app.get("/health")
+@app.get("/api/v1/health")
 async def health_check() -> dict:
     """Deep health check — verifies DB connectivity and service status."""
     db_ok = False

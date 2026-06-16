@@ -6,7 +6,6 @@ stocks and countries.
 """
 
 import logging
-from typing import Optional
 
 import httpx
 

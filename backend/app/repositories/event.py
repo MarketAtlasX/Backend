@@ -1,13 +1,12 @@
 from datetime import datetime, timedelta
 from typing import List, Optional
 
-from sqlalchemy import select, desc, and_
+from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.event import Event
 from app.repositories.base import BaseRepository
-from app.repositories.event_entity import EventEntityRepository
 
 
 class EventRepository(BaseRepository[Event]):
