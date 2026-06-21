@@ -1,8 +1,7 @@
 """Backtesting engine for signal validation."""
 
 import logging
-from datetime import datetime, timedelta
-from decimal import Decimal
+from datetime import datetime
 from typing import Optional
 
 from app.geopolitical.models import SignalResult

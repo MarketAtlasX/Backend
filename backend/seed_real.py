@@ -3,14 +3,13 @@
 import asyncio
 import os
 import sys
+
 sys.path.insert(0, '.')
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+
 from app.database import AsyncSessionLocal
 from app.models.entity import Entity
-from app.models.event import Event
-from app.models.event_entity import EventEntity
-from datetime import datetime
 
 REAL_ENTITIES = [
     # Countries with lat/lng (capital city coords)

@@ -1,4 +1,3 @@
-from typing import Optional
 from pydantic import Field, computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -89,6 +88,19 @@ class Settings(BaseSettings):
     jwt_secret: str = Field(alias="JWT_SECRET", default="change-me-in-production")
     jwt_algorithm: str = Field(alias="JWT_ALGORITHM", default="HS256")
     jwt_expiry_hours: int = Field(alias="JWT_EXPIRY_HOURS", default=24)
+
+    # -------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
+    # AI / LLM Configuration
+    # -------------------------------------------------------------------------
+    gemini_api_key: str = Field(default="", alias="GEMINI_API_KEY")
+    openai_api_key: str = Field(default="", alias="OPENAI_API_KEY")
+    claude_api_key: str = Field(default="", alias="CLAUDE_API_KEY")
+
+    # -------------------------------------------------------------------------
+    # Financial Data API
+    # -------------------------------------------------------------------------
+    alpha_vantage_api_key: str = Field(default="", alias="ALPHA_VANTAGE_API_KEY")
 
     # -------------------------------------------------------------------------
     # Feature Flags

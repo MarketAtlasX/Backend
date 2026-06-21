@@ -1,13 +1,15 @@
-from .intent_router import IntentRouter
-from .news_agent import NewsAgent
-from .market_agent import MarketAgent
-from .impact_agent import ImpactAgent
-from .graph_agent import GraphAgent
+from .debate_agent import DebateAgent
+from .event_similarity_agent import EventSimilarityAgent
 from .forecast_agent import ForecastAgent
+from .graph_agent import GraphAgent
+from .impact_agent import ImpactAgent
+from .intent_router import IntentRouter
+from .market_agent import MarketAgent
+from .news_agent import NewsAgent
 from .recommendation_agent import RecommendationAgent
 from .report_agent import ReportAgent
+from .risk_agent import RiskAgent
 from .simulation_agent import SimulationAgent
-from .debate_agent import DebateAgent
 
 __all__ = [
     "IntentRouter",
@@ -18,6 +20,8 @@ __all__ = [
     "ForecastAgent",
     "RecommendationAgent",
     "ReportAgent",
+    "RiskAgent",
     "SimulationAgent",
     "DebateAgent",
+    "EventSimilarityAgent",
 ]

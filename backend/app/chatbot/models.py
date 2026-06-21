@@ -1,6 +1,7 @@
-from pydantic import BaseModel, Field
-from typing import Optional, Any
 from enum import Enum
+from typing import Any, Optional
+
+from pydantic import BaseModel
 
 
 class IntentType(str, Enum):
@@ -11,6 +12,39 @@ class IntentType(str, Enum):
     SIMULATION = "SIMULATION"
     GRAPH = "GRAPH"
     REPORT = "REPORT"
+    SIMILARITY = "SIMILARITY"
+    RISK = "RISK"
+
+
+class RiskRating(str, Enum):
+    LOW = "LOW"
+    MODERATE = "MODERATE"
+    HIGH = "HIGH"
+    VERY_HIGH = "VERY_HIGH"
+
+
+class RiskFactor(BaseModel):
+    name: str
+    value: float
+    weight: float
+    score: float
+    direction: str
+
+
+class RiskIndex(BaseModel):
+    ticker: str
+    company_name: str = ""
+    overall_score: float
+    rating: RiskRating
+    factors: list[RiskFactor] = []
+    benchmark: dict[str, Any] = {}
+    summary: str = ""
+    timestamp: str = ""
+
+
+class RiskIndexRequest(BaseModel):
+    ticker: str
+    benchmark: str = "SPY"
 
 
 class Message(BaseModel):
@@ -33,6 +67,7 @@ class ChatResponse(BaseModel):
     confidence: float
     sources: list[str] = []
     report: Optional[dict[str, Any]] = None
+    explanations: Optional[dict[str, Any]] = None
 
 
 class GraphEntity(BaseModel):
@@ -67,3 +102,24 @@ class SimulationResult(BaseModel):
     probability: float
     time_horizon: str
     key_risks: list[str]
+
+
+class SimilarityRequest(BaseModel):
+    query: str
+    top_k: int = 5
+    min_score: float = 0.1
+    sector_filter: Optional[list[str]] = None
+    event_type_filter: Optional[list[str]] = None
+
+
+class MarketIntelligenceRequest(BaseModel):
+    ticker: str
+    include_profile: bool = True
+    include_news: bool = True
+    days: int = 30
+
+
+class CountryBriefRequest(BaseModel):
+    country: str
+    include_tickers: bool = True
+    days: int = 30

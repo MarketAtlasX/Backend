@@ -1,33 +1,32 @@
 import asyncio
 import logging
-
 from contextlib import asynccontextmanager
 
 from fastapi import APIRouter, FastAPI
 from sqlalchemy import text
 
-from app.config import settings
-from app.database import close_db, AsyncSessionLocal
 from app.cache import cache
-from app.middleware import RequestLoggingMiddleware, MetricsMiddleware
-from app.middleware.ratelimit import RateLimitMiddleware
 from app.chatbot.api.routes import chat_router
 from app.chatbot.api.websocket import handle_websocket as chat_ws_handler
-from app.routes.auth import router as auth_router
+from app.config import settings
+from app.database import AsyncSessionLocal, close_db
+from app.middleware import MetricsMiddleware, RequestLoggingMiddleware
+from app.middleware.ratelimit import RateLimitMiddleware
 from app.routes import (
-    event_router,
-    entity_router,
-    market_price_router,
-    signal_router,
     analysis_router,
-    kg_router,
     analyze_router,
+    backtest_router,
     country_router,
     dashboard_router,
+    entity_router,
+    event_router,
     globe_router,
+    kg_router,
+    market_price_router,
+    signal_router,
     ws_router,
-    backtest_router,
 )
+from app.routes.auth import router as auth_router
 from app.services.event_broadcaster import EventBroadcaster
 from app.services.market_stream_service import MarketStreamService
 
