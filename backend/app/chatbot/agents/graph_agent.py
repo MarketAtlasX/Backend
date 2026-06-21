@@ -19,9 +19,10 @@ class GraphAgent:
         try:
             from app.database import AsyncSessionLocal
             async with AsyncSessionLocal() as session:
-                from app.models.entity_relationship import EntityRelationship
-                from app.models.entity import Entity as EntityModel
                 from sqlalchemy import select
+
+                from app.models.entity import Entity as EntityModel
+                from app.models.entity_relationship import EntityRelationship
                 for ent_name in query_entities[:5]:
                     entity_stmt = select(EntityModel).where(EntityModel.name.ilike(f"%{ent_name}%"))
                     result = await session.execute(entity_stmt)

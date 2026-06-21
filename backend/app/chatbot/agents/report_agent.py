@@ -1,4 +1,3 @@
-import json
 import logging
 from datetime import datetime
 from typing import Any
@@ -18,8 +17,8 @@ class ReportAgent:
         try:
             from app.database import AsyncSessionLocal
             async with AsyncSessionLocal() as session:
-                from app.repositories.raw_event import RawEventRepository
                 from sqlalchemy import select
+
                 from app.models.raw_event import RawEvent
                 stmt = select(RawEvent).order_by(RawEvent.fetched_at.desc()).limit(15)
                 result = await session.execute(stmt)

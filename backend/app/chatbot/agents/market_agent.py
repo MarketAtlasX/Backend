@@ -1,8 +1,8 @@
-import json
 import logging
 from datetime import datetime
 from typing import Any
 
+from ...services.financial_data_service import FinancialDataService
 from ..llm.provider import get_llm
 from ..rag.retriever import retrieve_context
 
@@ -13,38 +13,63 @@ class MarketAgent:
     def __init__(self, db_session=None):
         self.llm = get_llm()
         self._session = db_session
-        self._prices_cache = []
         self._tickers_seen = set()
+        self._financial_service = FinancialDataService()
 
-    async def _load_market_data(self):
+    def _extract_tickers(self, query: str) -> list[str]:
+        words = query.split()
+        tickers = []
+        for w in words:
+            clean = w.strip(".,;:!?$()[]").upper()
+            if 1 <= len(clean) <= 5 and clean.isalpha():
+                tickers.append(clean)
+        known = {"SPY", "QQQ", "AAPL", "MSFT", "GOOGL", "AMZN", "TSLA", "META", "NVDA", "XLE", "XLF", "GDX", "TLT", "IWM", "DIA"}
+        return [t for t in tickers if t in known] or ["SPY"]
+
+    async def _load_market_data(self, query: str) -> str:
         try:
-            from app.repositories.market_price import MarketPriceRepository
-            from app.database import AsyncSessionLocal
-            async with AsyncSessionLocal() as session:
-                repo = MarketPriceRepository(session)
-                from sqlalchemy import select
-                from app.models.market_price import MarketPrice
-                stmt = select(MarketPrice).order_by(MarketPrice.price_date.desc()).limit(30)
-                result = await session.execute(stmt)
-                self._prices_cache = list(result.scalars().all())
+            tickers = self._extract_tickers(query)
+            lines = []
+            for ticker in tickers[:3]:
+                try:
+                    quote = self._financial_service.get_stock_quote(ticker)
+                    if quote and "error" not in quote:
+                        price = quote.get("price", quote.get("c", "N/A"))
+                        change = quote.get("change_percent", quote.get("dp", 0))
+                        lines.append(f"- {ticker}: ${price} ({change:+.2f}%)")
+                        self._tickers_seen.add(ticker)
+                except Exception:
+                    pass
+            if not lines:
+                return ""
+            return "Live market prices:\n" + "\n".join(lines)
         except Exception as e:
-            logger.warning(f"Could not load market data: {e}")
-
-    def _format_prices(self) -> str:
-        if not self._prices_cache:
+            logger.warning(f"Could not load financial data: {e}")
             return ""
-        lines = ["Live market prices:"]
-        for p in self._prices_cache[:15]:
-            ts = p.price_date.strftime("%Y-%m-%d") if p.price_date else "unknown"
-            ticker = p.symbol if hasattr(p, 'symbol') else f"entity_{p.entity_id}"
-            lines.append(f"- {ticker}: ${p.price:.2f} on {ts}")
-            self._tickers_seen.add(ticker)
-        return "\n".join(lines)
 
     async def process(self, query: str, context: dict[str, Any] = None) -> dict[str, Any]:
-        await self._load_market_data()
+        prices_text = await self._load_market_data(query)
+        if not prices_text:
+            try:
+                from app.database import AsyncSessionLocal
+                async with AsyncSessionLocal() as session:
+                    from sqlalchemy import select
+
+                    from app.models.market_price import MarketPrice
+                    stmt = select(MarketPrice).order_by(MarketPrice.price_date.desc()).limit(15)
+                    result = await session.execute(stmt)
+                    prices = list(result.scalars().all())
+                    if prices:
+                        lines = ["Live market prices (from database):"]
+                        for p in prices:
+                            ts = p.price_date.strftime("%Y-%m-%d") if p.price_date else "unknown"
+                            ticker = p.symbol if hasattr(p, 'symbol') else f"entity_{p.entity_id}"
+                            lines.append(f"- {ticker}: ${p.price:.2f} on {ts}")
+                        prices_text = "\n".join(lines)
+            except Exception:
+                pass
+
         knowledge = retrieve_context(query, limit=3)
-        prices_text = self._format_prices()
 
         system_prompt = """You are a market analyst at MarketAtlas. Analyze market data and provide actionable trading insights.
 Use the live market price data provided below. Be precise with numbers and trends."""
@@ -53,8 +78,7 @@ Use the live market price data provided below. Be precise with numbers and trend
 
 Today's date: {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}
 
-Live Market Prices (from real-time feeds):
-{prices_text if prices_text else "No market prices available in database."}
+{prices_text if prices_text else "No market prices available."}
 
 Relevant Knowledge:
 {knowledge if knowledge else "No specific knowledge base results."}
@@ -76,6 +100,5 @@ Analysis:"""
             "response": response,
             "market_data": {
                 "tickers": list(self._tickers_seen),
-                "num_prices": len(self._prices_cache),
             },
         }

@@ -2,9 +2,9 @@ import json
 import logging
 from typing import Any
 
+from ..knowledge.neo4j_client import Neo4jClient
 from ..llm.provider import get_llm
 from ..rag.retriever import retrieve_context
-from ..knowledge.neo4j_client import Neo4jClient
 
 logger = logging.getLogger(__name__)
 
@@ -21,11 +21,8 @@ class ImpactAgent:
         try:
             from app.database import AsyncSessionLocal
             async with AsyncSessionLocal() as session:
-                from app.repositories.signal import SignalRepository
-                from app.repositories.raw_event import RawEventRepository
-                signal_repo = SignalRepository(session)
-                event_repo = RawEventRepository(session)
                 from sqlalchemy import select
+
                 from app.models.raw_event import RawEvent
                 stmt = select(RawEvent).order_by(RawEvent.fetched_at.desc()).limit(15)
                 result = await session.execute(stmt)

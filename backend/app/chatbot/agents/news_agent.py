@@ -1,11 +1,11 @@
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any
 
+from ..knowledge.neo4j_client import Neo4jClient
 from ..llm.provider import get_llm
 from ..rag.retriever import retrieve_context
-from ..knowledge.neo4j_client import Neo4jClient
 
 logger = logging.getLogger(__name__)
 
@@ -19,9 +19,7 @@ class NewsAgent:
 
     async def _load_recent_events(self):
         try:
-            from app.repositories.raw_event import RawEventRepository
             if self._session:
-                repo = RawEventRepository(self._session)
                 from sqlalchemy import select
                 stmt = select(__import__('app.models.raw_event', fromlist=['RawEvent']).RawEvent).order_by(
                     __import__('app.models.raw_event', fromlist=['RawEvent']).RawEvent.fetched_at.desc()
@@ -33,11 +31,8 @@ class NewsAgent:
             logger.warning(f"Could not load events from DB: {e}")
 
         try:
-            from sqlalchemy.ext.asyncio import AsyncSession
             from app.database import AsyncSessionLocal
             async with AsyncSessionLocal() as session:
-                from app.repositories.raw_event import RawEventRepository
-                repo = RawEventRepository(session)
                 from sqlalchemy import select
                 stmt = select(__import__('app.models.raw_event', fromlist=['RawEvent']).RawEvent).order_by(
                     __import__('app.models.raw_event', fromlist=['RawEvent']).RawEvent.fetched_at.desc()
