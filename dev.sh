@@ -39,7 +39,12 @@ fi
 
 # ── 2. Backend (FastAPI) ────────────────────────────────────────────
 echo "[backend] Starting on :8000..."
-(cd "$ROOT/backend" && uvicorn app.main:app --reload --port 8000) &
+BACKEND_PY="$ROOT/venv/bin/uvicorn"
+if [ -f "$BACKEND_PY" ]; then
+  (cd "$ROOT/backend" && PYTHONPATH="$ROOT/backend" "$BACKEND_PY" app.main:app --reload --port 8000) &
+else
+  (cd "$ROOT/backend" && uvicorn app.main:app --reload --port 8000) &
+fi
 PIDS+=($!)
 
 # ── 3. Frontend (Vite) ──────────────────────────────────────────────
