@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
-from pydantic import BaseModel
 
 from app.database import get_db
 from app.models.event import Event

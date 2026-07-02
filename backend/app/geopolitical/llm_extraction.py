@@ -5,7 +5,7 @@ import logging
 import os
 from typing import Optional
 
-from app.geopolitical.models import NewsArticle, ExtractedEntity
+from app.geopolitical.models import ExtractedEntity, NewsArticle
 
 logger = logging.getLogger(__name__)
 

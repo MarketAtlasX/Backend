@@ -1,4 +1,4 @@
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.raw_event import RawEvent
@@ -10,7 +10,7 @@ class RawEventRepository(BaseRepository[RawEvent]):
         super().__init__(db, RawEvent)
 
     async def get_unprocessed(self, limit: int = 50) -> list[RawEvent]:
-        stmt = select(RawEvent).where(RawEvent.processed == False).order_by(RawEvent.fetched_at).limit(limit)
+        stmt = select(RawEvent).where(not RawEvent.processed).order_by(RawEvent.fetched_at).limit(limit)
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 

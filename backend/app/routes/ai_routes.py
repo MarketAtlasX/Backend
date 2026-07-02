@@ -3,18 +3,18 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.enums import EventSeverity, EventType
 from app.database import get_db
 from app.models.event import Event
-from app.repositories.event import EventRepository
 from app.repositories.entity import EntityRepository
+from app.repositories.event import EventRepository
 from app.repositories.market_price import MarketPriceRepository
-from app.services.ai_service import ai_service
-from app.services.kg_service import analyze_stock_knowledge_graph
-from app.services.signal_service import SignalService
 from app.schemas.analysis import AnalyzeEventRequest, AnalyzeEventResponse
 from app.schemas.event import EventRead
 from app.schemas.signal import SignalUpdate
-from app.core.enums import EventType, EventSeverity
+from app.services.ai_service import ai_service
+from app.services.kg_service import analyze_stock_knowledge_graph
+from app.services.signal_service import SignalService
 
 router = APIRouter(prefix="/events", tags=["analysis"])
 

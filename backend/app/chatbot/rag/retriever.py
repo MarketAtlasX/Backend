@@ -1,5 +1,4 @@
 import logging
-from typing import Any
 
 from .vector_store import search_knowledge, vector_store
 
@@ -34,9 +33,10 @@ async def seed_knowledge_base():
         return False
 
     try:
+        from sqlalchemy import select
+
         from app.database import AsyncSessionLocal
         from app.models.raw_event import RawEvent
-        from sqlalchemy import select
 
         async with AsyncSessionLocal() as session:
             stmt = select(RawEvent).order_by(RawEvent.fetched_at.desc()).limit(100)

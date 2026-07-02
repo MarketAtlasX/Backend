@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, Path, Query
 
-from app.services.entity_service import EntityService, get_entity_service
+from app.core.enums import EntityType
 from app.schemas.entity import EntityCreate, EntityRead, EntityUpdate
 from app.schemas.pagination import PaginatedResponse
-from app.core.enums import EntityType
+from app.services.entity_service import EntityService, get_entity_service
 
 router = APIRouter(prefix="/entities", tags=["entities"])
 

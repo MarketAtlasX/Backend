@@ -3,9 +3,9 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from app.geopolitical.pipeline import run_pipeline
 from app.services.ai_service import ai_service
 from app.services.kg_service import analyze_stock_knowledge_graph
-from app.geopolitical.pipeline import run_pipeline
 
 router = APIRouter(tags=["analysis"])
 
@@ -77,8 +77,8 @@ async def analyze_text(body: AnalyzeTextRequest) -> AnalyzeTextResponse:
         local_severity=result.local_severity,
         entity_count=len(result.entities_identified) + (len(kg.entities) if kg else 0),
         relations=[
-            Relation(source=s, target=t, label=l)
-            for s, t, l in result.relations[:10]
+            Relation(source=s, target=t, label=label)
+            for s, t, label in result.relations[:10]
         ],
     )
 

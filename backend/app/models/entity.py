@@ -1,11 +1,11 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import String, Text, DateTime, Index, CheckConstraint
+from sqlalchemy import CheckConstraint, DateTime, Index, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.database import Base
 from app.core.enums import EntityType
+from app.database import Base
 
 
 class Entity(Base):

@@ -1,5 +1,6 @@
-from typing import TypeVar, Generic, Type, Optional, List
-from sqlalchemy import select, func
+from typing import Generic, List, Optional, Type, TypeVar
+
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import ColumnElement
 

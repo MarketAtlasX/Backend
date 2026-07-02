@@ -12,12 +12,12 @@ Responsibilities:
 from fastapi import Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.enums import EntityType
 from app.database import get_db
 from app.models.entity import Entity
 from app.repositories.entity import EntityRepository
 from app.schemas.entity import EntityCreate, EntityUpdate
 from app.schemas.pagination import Page
-from app.core.enums import EntityType
 
 
 class EntityService:

@@ -1,10 +1,11 @@
 import warnings
+
 warnings.filterwarnings("ignore", category=UserWarning, module="qdrant_client")
 
-import logging
-from typing import Optional, Any
+import logging  # noqa: E402
+from typing import Any, Optional  # noqa: E402
 
-from .embeddings import embedding_model
+from .embeddings import embedding_model  # noqa: E402
 
 logger = logging.getLogger(__name__)
 

@@ -1,12 +1,13 @@
 from datetime import datetime
+
 from fastapi import APIRouter, Depends, Path, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.market_data_service import MarketDataService
-from app.services.market_price_service import MarketPriceService, get_market_price_service
+from app.database import get_db
 from app.schemas.market_price import MarketPriceCreate, MarketPriceRead
 from app.schemas.pagination import PaginatedResponse
-from app.database import get_db
+from app.services.market_data_service import MarketDataService
+from app.services.market_price_service import MarketPriceService, get_market_price_service
 
 router = APIRouter(prefix="/market-prices", tags=["market-prices"])
 

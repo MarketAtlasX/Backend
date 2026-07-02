@@ -2,10 +2,10 @@
 
 import logging
 import os
-from typing import Optional
-from datetime import datetime, timedelta
+from datetime import datetime
 
 import requests
+
 from app.geopolitical.models import NewsArticle
 
 logger = logging.getLogger(__name__)

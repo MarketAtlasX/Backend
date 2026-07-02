@@ -1,6 +1,6 @@
 """Port model — major port locations per country."""
 
-from sqlalchemy import String, Float
+from sqlalchemy import Float, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base

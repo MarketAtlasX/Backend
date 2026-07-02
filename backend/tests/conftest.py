@@ -10,17 +10,16 @@ from typing import AsyncGenerator
 
 import pytest
 import pytest_asyncio
-from httpx import AsyncClient, ASGITransport
+from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
-    create_async_engine,
     async_sessionmaker,
+    create_async_engine,
 )
 
-from app.main import app
-from app.database import Base, get_db
 from app.config import settings
-
+from app.database import Base, get_db
+from app.main import app
 
 # ---------------------------------------------------------------------------
 # Test database — uses marketatlas_test with the same credentials
@@ -117,8 +116,9 @@ async def sample_entity(db_session: AsyncSession) -> dict:
 @pytest_asyncio.fixture
 async def sample_event(db_session: AsyncSession) -> dict:
     """Create a sample event and return its data."""
-    from app.models.event import Event
     from datetime import datetime
+
+    from app.models.event import Event
 
     event = Event(
         title="US sanctions on Russian oil",

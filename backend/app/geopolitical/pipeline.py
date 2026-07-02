@@ -3,14 +3,15 @@
 import logging
 from typing import Optional
 
-from app.geopolitical.models import (
-    NewsArticle, ExtractedEntity, MarketSnapshot,
-    ImpactResult, SignalResult, AnalysisResult,
-)
-from app.geopolitical.ingestion import fetch_news
 from app.geopolitical.extraction import extract_entities
+from app.geopolitical.graph_builder import analyze_graph_impact, build_knowledge_graph
+from app.geopolitical.ingestion import fetch_news
 from app.geopolitical.llm_extraction import extract_with_llm
-from app.geopolitical.graph_builder import build_knowledge_graph, analyze_graph_impact
+from app.geopolitical.models import (
+    AnalysisResult,
+    ImpactResult,
+    MarketSnapshot,
+)
 from app.geopolitical.signals import generate_signal
 
 logger = logging.getLogger(__name__)

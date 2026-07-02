@@ -1,23 +1,27 @@
 import uuid
-from datetime import datetime
 from typing import Any, Literal
-from langgraph.graph import StateGraph, END
 
-from ..models import IntentType, ChatResponse
+from langgraph.graph import END, StateGraph
+
 from ..agents import (
-    IntentRouter,
-    NewsAgent,
-    MarketAgent,
-    ImpactAgent,
-    GraphAgent,
+    DebateAgent,
+    EventSimilarityAgent,
     ForecastAgent,
+    GraphAgent,
+    ImpactAgent,
+    IntentRouter,
+    MarketAgent,
+    NewsAgent,
     RecommendationAgent,
     ReportAgent,
+    RiskAgent,
     SimulationAgent,
-    DebateAgent,
 )
+from ..explain.attention_explainer import AttentionExplainer
+from ..explain.graph_explainer import GraphExplainer
+from ..explain.shap_explainer import SHAPExplainer
 from ..memory.short_term import short_term_memory
-from ..memory.long_term import long_term_memory
+from ..models import ChatResponse, IntentType
 from ..rag.retriever import seed_knowledge_base
 
 
@@ -45,6 +49,11 @@ recommendation_agent = RecommendationAgent()
 report_agent = ReportAgent()
 simulation_agent = SimulationAgent()
 debate_agent = DebateAgent()
+risk_agent = RiskAgent()
+event_similarity_agent = EventSimilarityAgent()
+shap_explainer = SHAPExplainer()
+attention_explainer = AttentionExplainer()
+graph_explainer = GraphExplainer()
 
 
 async def route_intent(state: AgentState) -> AgentState:
@@ -62,24 +71,21 @@ async def route_intent(state: AgentState) -> AgentState:
     return state
 
 
-def decide_agents(state: AgentState) -> Literal["debate", "report", "execute_debate", "execute_report", "execute_direct", "execute_news", "execute_market", "execute_impact", "execute_graph", "execute_forecast", "execute_recommendation", "execute_simulation"]:
+def decide_agents(state: AgentState) -> Literal["debate", "report", "execute_debate", "execute_report", "execute_direct", "execute_news", "execute_market", "execute_impact", "execute_graph", "execute_forecast", "execute_recommendation", "execute_simulation", "execute_similarity", "execute_risk"]:
     intent = state["intent"]
-
-    if intent == IntentType.REPORT:
-        return "execute_report"
-    if intent == IntentType.SIMULATION:
-        return "execute_simulation"
-
-    if intent == IntentType.NEWS:
-        return "execute_news"
-    if intent == IntentType.MARKET:
-        return "execute_market"
-    if intent == IntentType.IMPACT:
-        return "execute_impact"
-    if intent == IntentType.GRAPH:
-        return "execute_graph"
-    if intent == IntentType.RECOMMENDATION:
-        return "execute_recommendation"
+    routing_map = {
+        IntentType.REPORT: "execute_report",
+        IntentType.SIMULATION: "execute_simulation",
+        IntentType.SIMILARITY: "execute_similarity_pipeline",
+        IntentType.NEWS: "execute_news",
+        IntentType.MARKET: "execute_market",
+        IntentType.IMPACT: "execute_impact",
+        IntentType.GRAPH: "execute_graph",
+        IntentType.RECOMMENDATION: "execute_recommendation",
+        IntentType.RISK: "execute_risk",
+    }
+    if intent in routing_map:
+        return routing_map[intent]
 
     agents = state["agents_used"]
     if len(agents) > 2:
@@ -158,12 +164,73 @@ async def execute_simulation(state: AgentState) -> AgentState:
     return state
 
 
+async def execute_similarity(state: AgentState) -> AgentState:
+    _ensure_context(state)
+    result = await event_similarity_agent.process(state["query"], state.get("_context"))
+    state["agent_responses"]["EventSimilarityAgent"] = result["response"]
+    if "similarity_data" in result:
+        state["_context"]["similarity"] = result["similarity_data"]
+    if "explanations" in result:
+        state["_context"]["explanations"] = result["explanations"]
+    if "explanation_text" in result:
+        state["_context"]["explanation_text"] = result["explanation_text"]
+    state["final_response"] = result["response"]
+    return state
+
+
+async def execute_similarity_pipeline(state: AgentState) -> AgentState:
+    _ensure_context(state)
+    query = state["query"]
+    ctx = state.get("_context", {})
+
+    news_res = await news_agent.process(query, ctx)
+    similarity_res = await event_similarity_agent.process(query, ctx)
+    impact_res = await impact_agent.process(query, ctx)
+    forecast_res = await forecast_agent.process(query, ctx)
+    report_res = await report_agent.process(query, ctx)
+
+    state["agent_responses"]["NewsAgent"] = news_res["response"]
+    state["agent_responses"]["EventSimilarityAgent"] = similarity_res["response"]
+    state["agent_responses"]["ImpactAgent"] = impact_res["response"]
+    state["agent_responses"]["ForecastAgent"] = forecast_res["response"]
+    state["agent_responses"]["ReportAgent"] = report_res["response"]
+
+    similarity_data = similarity_res.get("similarity_data", {})
+    explanation_text = similarity_res.get("explanation_text", "")
+
+    full_report = event_similarity_agent.format_full_report(
+        query=query,
+        similarity_data=similarity_data,
+        news_response=news_res["response"],
+        impact_response=impact_res["response"],
+        forecast_response=forecast_res["response"],
+        report_response=report_res["response"],
+        explanation_text=explanation_text,
+    )
+
+    state["final_response"] = full_report
+    state["_context"]["similarity"] = similarity_data
+    if "explanations" in similarity_res:
+        state["_context"]["explanations"] = similarity_res["explanations"]
+    return state
+
+
 async def execute_report(state: AgentState) -> AgentState:
     _ensure_context(state)
     result = await report_agent.process(state["query"], state.get("_context"))
     state["agent_responses"]["ReportAgent"] = result["response"]
     state["final_response"] = result["response"]
     state["sources"].extend(result.get("sources", []))
+    return state
+
+
+async def execute_risk(state: AgentState) -> AgentState:
+    _ensure_context(state)
+    result = await risk_agent.process(state["query"], state.get("_context"))
+    state["agent_responses"]["RiskAgent"] = result["response"]
+    if "risk_indices" in result:
+        state["_context"]["risk_indices"] = result["risk_indices"]
+    state["final_response"] = result["response"]
     return state
 
 
@@ -193,6 +260,10 @@ async def execute_direct(state: AgentState) -> AgentState:
             r = await recommendation_agent.process(state["query"], state.get("_context"))
         elif agent_name == "SimulationAgent":
             r = await simulation_agent.process(state["query"], state.get("_context"))
+        elif agent_name == "EventSimilarityAgent":
+            r = await event_similarity_agent.process(state["query"], state.get("_context"))
+        elif agent_name == "RiskAgent":
+            r = await risk_agent.process(state["query"], state.get("_context"))
         elif agent_name == "ReportAgent":
             r = await report_agent.process(state["query"], state.get("_context"))
         else:
@@ -207,10 +278,41 @@ async def execute_direct(state: AgentState) -> AgentState:
 
 
 def calculate_confidence(state: AgentState) -> AgentState:
+    _ensure_context(state)
     base = state["intent_confidence"]
     num_responses = len(state["agent_responses"])
     response_bonus = min(num_responses * 0.05, 0.2)
     state["confidence"] = min(base + response_bonus, 0.95)
+
+    query = state["query"]
+    intent = state["intent"]
+    ctx = state.get("_context", {})
+
+    explanations = {}
+    try:
+        shap_result = shap_explainer.explain(prediction=intent.value, context={"query": query, "market_data": ctx.get("market_data", {})})
+        if shap_result.shap:
+            explanations["shap"] = shap_result.shap.model_dump()
+    except Exception:
+        pass
+
+    try:
+        attn_result = attention_explainer.explain(context={"query": query, "similar_events": ctx.get("similarity", {}).get("similar_events", [])})
+        if attn_result.attention:
+            explanations["attention"] = attn_result.attention.model_dump()
+    except Exception:
+        pass
+
+    try:
+        graph_result = graph_explainer.explain(context={"query": query, "entities": ctx.get("entities", [])})
+        if graph_result.graph:
+            explanations["graph"] = graph_result.graph.model_dump()
+    except Exception:
+        pass
+
+    if explanations:
+        state["_context"]["explanations"] = explanations
+
     return state
 
 
@@ -231,7 +333,10 @@ def build_workflow() -> StateGraph:
     workflow.add_node("execute_forecast", execute_forecast)
     workflow.add_node("execute_recommendation", execute_recommendation)
     workflow.add_node("execute_simulation", execute_simulation)
+    workflow.add_node("execute_similarity", execute_similarity)
+    workflow.add_node("execute_similarity_pipeline", execute_similarity_pipeline)
     workflow.add_node("execute_report", execute_report)
+    workflow.add_node("execute_risk", execute_risk)
     workflow.add_node("execute_debate", execute_debate)
     workflow.add_node("execute_direct", execute_direct)
     workflow.add_node("calculate_confidence", calculate_confidence)
@@ -255,13 +360,17 @@ def build_workflow() -> StateGraph:
             "execute_forecast": "execute_forecast",
             "execute_recommendation": "execute_recommendation",
             "execute_simulation": "execute_simulation",
+            "execute_similarity": "execute_similarity",
+            "execute_similarity_pipeline": "execute_similarity_pipeline",
+            "execute_risk": "execute_risk",
         }
     )
 
     execution_nodes = [
         "execute_news", "execute_market", "execute_impact", "execute_graph",
         "execute_forecast", "execute_recommendation", "execute_simulation",
-        "execute_report", "execute_debate", "execute_direct",
+        "execute_similarity", "execute_similarity_pipeline", "execute_report",
+        "execute_risk", "execute_debate", "execute_direct",
     ]
     for node in execution_nodes:
         workflow.add_edge(node, "calculate_confidence")
@@ -306,4 +415,5 @@ async def run_chat(query: str, conversation_id: str = None, user_id: str = "defa
         agents_used=result.get("agents_used", []),
         confidence=result.get("confidence", 0.5),
         sources=list(set(result.get("sources", []))),
+        explanations=result.get("_context", {}).get("explanations"),
     )

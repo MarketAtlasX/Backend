@@ -2,11 +2,11 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import Numeric, DateTime, ForeignKey, String, Index, Text, CheckConstraint
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.core.enums import SignalStatus, SignalType
 from app.database import Base
-from app.core.enums import SignalType, SignalStatus
 
 
 class Signal(Base):

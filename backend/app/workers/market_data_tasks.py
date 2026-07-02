@@ -6,8 +6,8 @@ during potentially slow external data retrieval.
 
 import logging
 
-from app.workers.celery_app import celery_app
 from app.workers import _run_async
+from app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
 

@@ -1,8 +1,10 @@
 import os
+
 os.environ["HF_HUB_OFFLINE"] = "1"
 
-import numpy as np
 from typing import List
+
+import numpy as np
 
 
 class BGEMModel:

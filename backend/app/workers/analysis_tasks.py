@@ -6,8 +6,8 @@ allowing the API to return immediately while analysis runs asynchronously.
 
 import logging
 
-from app.workers.celery_app import celery_app
 from app.workers import _run_async
+from app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
 
@@ -25,13 +25,13 @@ def analyze_event_task(self, event_id: int, entity_ids: list[int] | None = None)
         result = task.get(timeout=120)  # or poll with task.ready()
     """
     from app.database import AsyncSessionLocal
-    from app.repositories.event import EventRepository
     from app.repositories.entity import EntityRepository
+    from app.repositories.event import EventRepository
     from app.repositories.market_price import MarketPriceRepository
-    from app.services.ai_service import ai_service
-    from app.services.signal_service import SignalService
-    from app.services.kg_service import analyze_stock_knowledge_graph
     from app.schemas.signal import SignalUpdate
+    from app.services.ai_service import ai_service
+    from app.services.kg_service import analyze_stock_knowledge_graph
+    from app.services.signal_service import SignalService
 
     async def _run():
         async with AsyncSessionLocal() as db:
@@ -53,6 +53,7 @@ def analyze_event_task(self, event_id: int, entity_ids: list[int] | None = None)
             else:
                 from sqlalchemy import select
                 from sqlalchemy.orm import selectinload
+
                 from app.models.event import Event as EventModel
 
                 query = (

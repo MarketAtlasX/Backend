@@ -4,12 +4,12 @@ from fastapi import APIRouter, Depends, HTTPException, Path
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.services.country_service import get_country_overview, get_country_kg_news
 from app.repositories.country_repository import CountryRepository
-from app.repositories.trade_route_repository import TradeRouteRepository
 from app.repositories.military_relation_repository import MilitaryRelationRepository
 from app.repositories.port_repository import PortRepository
-from app.serializers import _trade_route_to_dict, _military_relation_to_dict, _port_to_dict
+from app.repositories.trade_route_repository import TradeRouteRepository
+from app.serializers import _military_relation_to_dict, _port_to_dict, _trade_route_to_dict
+from app.services.country_service import get_country_kg_news, get_country_overview
 
 router = APIRouter(prefix="/countries", tags=["countries"])
 

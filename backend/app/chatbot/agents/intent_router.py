@@ -1,7 +1,7 @@
 import re
-from ..models import IntentType
-from ..llm.provider import get_llm
 
+from ..llm.provider import get_llm
+from ..models import IntentType
 
 FOLLOWUP_PATTERNS = re.compile(
     r"^(what|which|who|where|why|how|tell me more|explain|elaborate|give me|show me|list|name"
@@ -28,6 +28,8 @@ class IntentRouter:
             IntentType.SIMULATION: ["simulate", "what if", "scenario", "if happens", "if occurs", "what would"],
             IntentType.GRAPH: ["relationship", "connection", "how is", "related to", "linked to", "network", "graph", "connection between"],
             IntentType.REPORT: ["report", "brief", "analysis", "summary", "deep dive", "intelligence report", "overview"],
+            IntentType.SIMILARITY: ["similar", "comparable", "analogous", "parallel", "like", "resemble", "alike", "remind", "mirror", "echo", "reminiscent", "historic", "precedent", "past event"],
+            IntentType.RISK: ["risk", "volatility", "volatile", "safe", "dangerous", "drawdown", "value at risk", "how risky", "risk score", "risk assessment", "risk analysis"],
         }
 
         scores = {}
@@ -53,6 +55,8 @@ Categories:
 - SIMULATION: What-if scenarios, hypothetical situations
 - GRAPH: Entity relationships, connections, network queries
 - REPORT: Comprehensive analysis, briefings, intelligence reports
+- SIMILARITY: Historical parallels, similar past events, precedents, comparisons to historical events
+- RISK: Risk assessment, volatility analysis, risk scores, safety of investments, risk evaluation
 
 This is a follow-up question in an ongoing conversation.{context_hint}
 If the query refers to a previous exchange, classify it based on the topic of the conversation.
@@ -79,5 +83,7 @@ Category:"""
             IntentType.SIMULATION: ["SimulationAgent", "ImpactAgent"],
             IntentType.GRAPH: ["GraphAgent", "NewsAgent"],
             IntentType.REPORT: ["ReportAgent", "ImpactAgent", "MarketAgent", "GraphAgent", "NewsAgent"],
+            IntentType.SIMILARITY: ["EventSimilarityAgent", "ImpactAgent"],
+            IntentType.RISK: ["RiskAgent", "MarketAgent"],
         }
         return routing.get(intent, ["ImpactAgent"])

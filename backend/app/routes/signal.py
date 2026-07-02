@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, Path, Query
 
-from app.services.signal_service import SignalService, get_signal_service
-from app.schemas.signal import SignalCreate, SignalRead, SignalUpdate
+from app.core.enums import SignalStatus, SignalType
 from app.schemas.pagination import PaginatedResponse
-from app.core.enums import SignalType, SignalStatus
+from app.schemas.signal import SignalCreate, SignalRead, SignalUpdate
+from app.services.signal_service import SignalService, get_signal_service
 
 _SERIALIZER = SignalRead
 

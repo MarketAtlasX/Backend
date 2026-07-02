@@ -5,12 +5,12 @@ reducing frontend waterfall requests.
 """
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models.event import Event
 from app.models.entity import Entity
+from app.models.event import Event
 from app.models.signal import Signal
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])

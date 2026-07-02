@@ -2,16 +2,18 @@
 import asyncio
 import os
 import sys
+
 sys.path.insert(0, '.')
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from sqlalchemy import select
+
 from app.database import AsyncSessionLocal
-from app.models.event import Event
 from app.models.entity import Entity
+from app.models.event import Event
 from app.models.event_entity import EventEntity
-from app.models.signal import Signal
 from app.models.market_price import MarketPrice
+from app.models.signal import Signal
 
 
 async def clean():

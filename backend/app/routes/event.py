@@ -1,14 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.enums import EventSeverity, EventStatus, EventType
 from app.database import get_db
-from app.services.event_service import EventService, get_event_service
-from app.repositories.event_entity import EventEntityRepository
-from app.repositories.event import EventRepository
 from app.repositories.entity import EntityRepository
-from app.schemas.event import EventCreate, EventRead, EventUpdate, EventReadWithEntities
+from app.repositories.event import EventRepository
+from app.repositories.event_entity import EventEntityRepository
+from app.schemas.event import EventCreate, EventRead, EventReadWithEntities, EventUpdate
 from app.schemas.pagination import PaginatedResponse
-from app.core.enums import EventType, EventSeverity, EventStatus
+from app.services.event_service import EventService, get_event_service
 
 router = APIRouter(prefix="/events", tags=["events"])
 

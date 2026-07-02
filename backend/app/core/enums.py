@@ -12,7 +12,6 @@ Using StrEnum means the stored and serialised value is the plain string
 
 from enum import StrEnum
 
-
 # ---------------------------------------------------------------------------
 # Event enums
 # ---------------------------------------------------------------------------

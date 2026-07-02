@@ -3,9 +3,9 @@ from decimal import Decimal
 from typing import Optional
 
 from app.core.enums import SignalType
+from app.geopolitical.pipeline import run_pipeline as unified_run_pipeline
 from app.schemas.signal import SignalCreate
 from app.services.market_agents_client import market_agents_client
-from app.geopolitical.pipeline import run_pipeline as unified_run_pipeline
 
 logger = logging.getLogger(__name__)
 
@@ -18,14 +18,18 @@ def _get_market_snapshot(
     a hard dependency on the market_agents package at import time."""
     if price_history and len(price_history) >= 5:
         try:
-            from market_agents.market_data.market_data_agent import MarketDataAgent  # type: ignore[import-untyped]
+            from market_agents.market_data.market_data_agent import (
+                MarketDataAgent,  # type: ignore[import-untyped]
+            )
             agent = MarketDataAgent(prices=price_history)
             return agent.snapshot()
         except ImportError:
             pass
     elif ticker_symbol:
         try:
-            from market_agents.market_data.market_data_agent import MarketDataAgent  # type: ignore[import-untyped]
+            from market_agents.market_data.market_data_agent import (
+                MarketDataAgent,  # type: ignore[import-untyped]
+            )
             agent = MarketDataAgent.from_yfinance(ticker_symbol)
             return agent.snapshot()
         except ImportError:
@@ -93,8 +97,6 @@ class AIService:
         current_price: Optional[Decimal] = None,
         price_history: Optional[list[float]] = None,
     ) -> AIAnalysisResult:
-        text = f"{event_title}. {event_description}"
-
         snapshot = _get_market_snapshot(price_history, ticker_symbol)
 
         raw = await market_agents_client.analyze(

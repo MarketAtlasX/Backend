@@ -1,6 +1,6 @@
 """Tests for the KG response Pydantic models."""
 
-from app.schemas.knowledge_graph import KGResponse, KGNewsItem, KGEntity, KGGraphEdge
+from app.schemas.knowledge_graph import KGEntity, KGGraphEdge, KGNewsItem, KGResponse
 
 
 def test_kg_response_empty():

@@ -2,9 +2,8 @@
 
 import logging
 from typing import Optional
-from decimal import Decimal
 
-from app.geopolitical.models import MarketSnapshot, ImpactResult, SignalResult
+from app.geopolitical.models import ImpactResult, MarketSnapshot, SignalResult
 
 logger = logging.getLogger(__name__)
 

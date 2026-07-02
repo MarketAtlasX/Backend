@@ -1,7 +1,7 @@
-from typing import List, Optional
 from datetime import datetime, timedelta
+from typing import List, Optional
 
-from sqlalchemy import select, and_, desc
+from sqlalchemy import and_, desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.market_price import MarketPrice

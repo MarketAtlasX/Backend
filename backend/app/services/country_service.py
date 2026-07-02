@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -74,7 +75,6 @@ def _generate_events_from_graph(country: Entity, edges: list[dict]) -> list[dict
             continue
 
         other = tgt if src == country_name else src
-        other_lower = other.lower()
 
         if "sanction" in rel:
             event_type = "sanction"

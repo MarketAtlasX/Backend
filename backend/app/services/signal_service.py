@@ -13,15 +13,15 @@ Responsibilities:
 from fastapi import Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.enums import SignalStatus, SignalType
 from app.database import get_db
 from app.models.signal import Signal
-from app.repositories.signal import SignalRepository
-from app.services.event_broadcaster import get_broadcaster
-from app.repositories.event import EventRepository
 from app.repositories.entity import EntityRepository
-from app.schemas.signal import SignalCreate, SignalUpdate
+from app.repositories.event import EventRepository
+from app.repositories.signal import SignalRepository
 from app.schemas.pagination import Page
-from app.core.enums import SignalType, SignalStatus
+from app.schemas.signal import SignalCreate, SignalUpdate
+from app.services.event_broadcaster import get_broadcaster
 
 
 class SignalService:

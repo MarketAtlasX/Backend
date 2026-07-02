@@ -9,14 +9,13 @@ Usage:
 import asyncio
 import logging
 
-from sqlalchemy import select, delete
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import delete, select
 
 from app.database import AsyncSessionLocal
 from app.models.country import Country
-from app.models.trade_route import TradeRoute
 from app.models.military_relation import MilitaryRelation
 from app.models.port import Port
+from app.models.trade_route import TradeRoute
 
 logger = logging.getLogger(__name__)
 

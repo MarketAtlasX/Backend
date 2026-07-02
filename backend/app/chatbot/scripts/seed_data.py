@@ -75,7 +75,7 @@ async def seed_database():
     from app.models.raw_event import RawEvent
 
     async with AsyncSessionLocal() as session:
-        from sqlalchemy import select, func
+        from sqlalchemy import func, select
         result = await session.execute(select(func.count()).select_from(RawEvent))
         count = result.scalar()
         if count and count > 0:

@@ -1,13 +1,12 @@
 """Entity extraction and sentiment analysis for geopolitical news."""
 
-import logging
 import functools
-from typing import Optional
+import logging
 
 import spacy
 from textblob import TextBlob
 
-from app.geopolitical.models import NewsArticle, ExtractedEntity
+from app.geopolitical.models import ExtractedEntity, NewsArticle
 
 logger = logging.getLogger(__name__)
 

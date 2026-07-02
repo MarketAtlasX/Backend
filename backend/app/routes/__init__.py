@@ -1,16 +1,16 @@
 """API route handlers."""
-from app.routes.event import router as event_router
-from app.routes.entity import router as entity_router
-from app.routes.market_price import router as market_price_router
-from app.routes.signal import router as signal_router
 from app.routes.ai_routes import router as analysis_router
-from app.routes.kg_routes import router as kg_router
 from app.routes.analyze import router as analyze_router
+from app.routes.backtest import router as backtest_router
 from app.routes.country import router as country_router
 from app.routes.dashboard import router as dashboard_router
+from app.routes.entity import router as entity_router
+from app.routes.event import router as event_router
 from app.routes.globe_routes import router as globe_router
+from app.routes.kg_routes import router as kg_router
+from app.routes.market_price import router as market_price_router
+from app.routes.signal import router as signal_router
 from app.routes.ws import ws_router
-from app.routes.backtest import router as backtest_router
 
 __all__ = [
     "event_router",

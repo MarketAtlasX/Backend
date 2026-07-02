@@ -1,5 +1,4 @@
 from collections import defaultdict, deque
-from typing import Optional
 
 
 class ShortTermMemory:

@@ -1,11 +1,10 @@
 """Build and analyze knowledge graphs from extracted entities."""
 
 import logging
-from typing import Optional
 
 import networkx as nx
 
-from app.geopolitical.models import NewsArticle, ExtractedEntity, GraphNode, GraphEdge
+from app.geopolitical.models import ExtractedEntity, GraphEdge, GraphNode
 
 logger = logging.getLogger(__name__)
 

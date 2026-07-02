@@ -96,8 +96,8 @@ class GDELTStreamService:
 
     async def _create_event(self, article: dict[str, Any]) -> dict[str, Any] | None:
         from app.database import AsyncSessionLocal
-        from app.repositories.event import EventRepository
         from app.repositories.entity import EntityRepository
+        from app.repositories.event import EventRepository
         from app.repositories.event_entity import EventEntityRepository
 
         title = article.get("title", "")[:255]
@@ -151,10 +151,11 @@ class GDELTStreamService:
         return None
 
     async def _match_entities(
-        self, title: str, content: str, repo: "EntityRepository",
+        self, title: str, content: str, repo: "EntityRepository",  # noqa: F821
     ) -> list[int]:
         text = (title + " " + content).lower()
         from sqlalchemy import select
+
         from app.models.entity import Entity as EntityModel
 
         result = await repo.session.execute(

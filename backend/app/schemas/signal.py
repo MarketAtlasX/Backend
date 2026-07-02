@@ -1,9 +1,10 @@
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional
+
 from pydantic import BaseModel, Field, field_validator
 
-from app.core.enums import SignalType, SignalStatus
+from app.core.enums import SignalStatus, SignalType
 
 
 def _naive_utc(v: datetime) -> datetime:

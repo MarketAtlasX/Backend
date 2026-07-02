@@ -12,14 +12,14 @@ from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.repositories.event import EventRepository
 from app.repositories.entity import EntityRepository
+from app.repositories.event import EventRepository
 from app.repositories.event_entity import EventEntityRepository
-from app.services.kg_service import (
-    analyze_stock_knowledge_graph,
-    analyze_country_knowledge_graph,
-)
 from app.schemas.knowledge_graph import KGResponse
+from app.services.kg_service import (
+    analyze_country_knowledge_graph,
+    analyze_stock_knowledge_graph,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -103,7 +103,7 @@ class EventIngestionService:
                 "source_url": article.url,
             })
 
-            link = await self._event_entity_repo.create_link(event.id, entity_id)
+            await self._event_entity_repo.create_link(event.id, entity_id)
             created.append((event.id, entity_id))
 
         await self._session.commit()

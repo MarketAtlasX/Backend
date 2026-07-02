@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 from decimal import Decimal
-from typing import Optional
+
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -12,7 +12,7 @@ def _naive_utc(v: datetime) -> datetime:
 
 class MarketPriceBase(BaseModel):
     """Base schema for MarketPrice with OHLCV data."""
-    
+
     entity_id: int = Field(..., description="ID of the entity (company/ticker)")
     open_price: Decimal = Field(..., description="Opening price")
     high_price: Decimal = Field(..., description="Highest price")
@@ -32,9 +32,9 @@ class MarketPriceCreate(MarketPriceBase):
 
 class MarketPriceRead(MarketPriceBase):
     """Schema for reading a MarketPrice record from the database."""
-    
+
     id: int = Field(description="MarketPrice ID")
     created_at: datetime = Field(description="When the record was created")
     updated_at: datetime = Field(description="When the record was last updated")
-    
+
     model_config = {"from_attributes": True}

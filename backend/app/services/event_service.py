@@ -14,12 +14,12 @@ in route handlers.
 from fastapi import Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.enums import EventSeverity, EventStatus, EventType
 from app.database import get_db
 from app.models.event import Event
 from app.repositories.event import EventRepository
 from app.schemas.event import EventCreate, EventUpdate
 from app.schemas.pagination import Page
-from app.core.enums import EventType, EventSeverity, EventStatus
 
 
 class EventService:

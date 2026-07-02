@@ -1,8 +1,9 @@
 from datetime import datetime, timezone
 from typing import Optional
+
 from pydantic import BaseModel, Field, field_validator
 
-from app.core.enums import EventType, EventSeverity, EventStatus
+from app.core.enums import EventSeverity, EventStatus, EventType
 
 
 def _naive_utc(v: datetime) -> datetime:
