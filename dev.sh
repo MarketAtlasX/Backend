@@ -95,7 +95,25 @@ else
   echo "[market-agents] Not found, skipping."
 fi
 
-# ── 5. KG Agent (optional) ──────────────────────────────────────────
+# ── 5. World State (optional) ─────────────────────────────────────────
+WS_DIR=""
+for d in "$ROOT/../world_state" "$HOME/world_state"; do
+  [ -d "$d" ] && WS_DIR="$d" && break
+done
+if [ -n "$WS_DIR" ]; then
+  echo "[world-state] Starting on :8006..."
+  WS_PY="$WS_DIR/venv/bin/uvicorn"
+  if [ -f "$WS_PY" ]; then
+    (cd "$WS_DIR" && PYTHONPATH="$WS_DIR" "$WS_PY" world_state.server:app --reload --port 8006) &
+  else
+    (cd "$WS_DIR" && PYTHONPATH="$WS_DIR" uvicorn world_state.server:app --reload --port 8006) &
+  fi
+  PIDS+=($!)
+else
+  echo "[world-state] Not found, skipping."
+fi
+
+# ── 6. KG Agent (optional) ──────────────────────────────────────────
 KG_DIR=""
 for d in "$ROOT/../knowledge-graph-agent" "$HOME/knowledge-graph-agent"; do
   [ -d "$d" ] && KG_DIR="$d" && break
@@ -119,6 +137,7 @@ echo "  MarketAtlas — all services starting in parallel"
 echo "  Backend:   http://localhost:8000"
 echo "  Frontend:  http://localhost:5173"
 echo "  Market:    http://localhost:8004  (if found)"
+echo "  World St:  http://localhost:8006  (if found)"
 echo "  KG Agent:  http://localhost:8005  (if found)"
 echo "═══════════════════════════════════════════════════════"
 echo "  Press Ctrl+C to stop everything."

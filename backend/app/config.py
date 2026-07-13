@@ -103,6 +103,16 @@ class Settings(BaseSettings):
     alpha_vantage_api_key: str = Field(default="", alias="ALPHA_VANTAGE_API_KEY")
 
     # -------------------------------------------------------------------------
+    # World State Service (external microservice from separate repo)
+    # Runs as ``uvicorn world_state.server:app --port 8006`` in ../world_state/
+    # -------------------------------------------------------------------------
+    world_state_url: str = Field(
+        default="http://localhost:8006",
+        alias="WORLD_STATE_URL",
+        description="Base URL of the Dynamic World State service",
+    )
+
+    # -------------------------------------------------------------------------
     # Feature Flags
     # -------------------------------------------------------------------------
     enable_workers: bool = Field(default=False, alias="ENABLE_WORKERS")

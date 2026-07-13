@@ -26,5 +26,13 @@ services:
     ports:
       - "8000:8000"
 
+  world-state:
+    build: ../world_state
+    env_file:
+      - .env
+    ports:
+      - "8006:8006"
+    command: uvicorn world_state.server:app --host 0.0.0.0 --port 8006
+
 volumes:
   pgdata:

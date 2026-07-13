@@ -26,6 +26,7 @@ from app.routes import (
     kg_router,
     market_price_router,
     signal_router,
+    world_state_router,
     ws_router,
 )
 from app.routes.auth import router as auth_router
@@ -125,6 +126,7 @@ api_v1_router.include_router(analyze_router)     # /analyze, /analyze/v2
 api_v1_router.include_router(country_router)
 api_v1_router.include_router(dashboard_router)
 api_v1_router.include_router(globe_router)       # /relations/trade, /relations/military, /ports
+api_v1_router.include_router(world_state_router)
 api_v1_router.include_router(backtest_router)
 app.include_router(api_v1_router)
 

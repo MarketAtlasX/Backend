@@ -10,6 +10,7 @@ from app.routes.globe_routes import router as globe_router
 from app.routes.kg_routes import router as kg_router
 from app.routes.market_price import router as market_price_router
 from app.routes.signal import router as signal_router
+from app.routes.world_state import router as world_state_router
 from app.routes.ws import ws_router
 
 __all__ = [
@@ -23,6 +24,7 @@ __all__ = [
     "country_router",
     "dashboard_router",
     "globe_router",
+    "world_state_router",
     "ws_router",
     "backtest_router",
 ]
