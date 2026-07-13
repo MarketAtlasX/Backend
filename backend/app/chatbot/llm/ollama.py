@@ -33,7 +33,7 @@ class OllamaLLM(LLMInterface):
         payload = {"model": self.model, "prompt": prompt, "stream": False, "options": {"temperature": temperature}}
         if system_prompt:
             payload["system"] = system_prompt
-        with httpx.Client(base_url=self.base_url, timeout=30) as client:
+        with httpx.Client(base_url=self.base_url, timeout=120) as client:
             resp = client.post("/api/generate", json=payload)
             resp.raise_for_status()
             return resp.json().get("response", "")

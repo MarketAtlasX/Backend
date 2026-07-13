@@ -274,7 +274,7 @@ class MockLLM(LLMInterface):
 def get_llm() -> LLMInterface:
     try:
         hybrid = HybridLLM()
-        if hybrid._gemini_available:
+        if hybrid._try_gemini():
             return hybrid
     except Exception:
         pass

@@ -8,7 +8,7 @@ class AttentionExplainer(BaseExplainer):
     def __init__(self):
         self._rng = __import__("numpy", fromlist=["random"]).random.default_rng(42)
 
-    def explain(self, prediction: str = "", context: dict[str, Any] | None = None) -> ExplanationResult:
+    async def explain(self, prediction: str = "", context: dict[str, Any] | None = None) -> ExplanationResult:
         ctx = context or {}
         query = ctx.get("query", ctx.get("original_query", ""))
         similar_events = ctx.get("similar_events", [])

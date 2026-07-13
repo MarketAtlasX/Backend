@@ -1,6 +1,7 @@
 from typing import Any
 
 from ..knowledge.neo4j_client import Neo4jClient
+from ..pipeline_adapter import run_graph_path_pipeline, run_entity_extraction_pipeline
 from .base import BaseExplainer
 from .models import GraphExplanation, GraphPathStep, ExplanationResult
 
@@ -20,7 +21,7 @@ class GraphExplainer(BaseExplainer):
     def __init__(self):
         self.neo4j = Neo4jClient()
 
-    def explain(self, prediction: str = "", context: dict[str, Any] | None = None) -> ExplanationResult:
+    async def explain(self, prediction: str = "", context: dict[str, Any] | None = None) -> ExplanationResult:
         ctx = context or {}
         entities = ctx.get("entities", [])
         sectors = ctx.get("sectors", [])
@@ -29,7 +30,18 @@ class GraphExplainer(BaseExplainer):
         if not entities and not sectors:
             entities = self._extract_entities_from_query(query)
 
-        path = self._build_reasoning_path(entities, sectors, query)
+        pipeline_result = await run_graph_path_pipeline(
+            entities=entities or ["Geopolitical Event"],
+            sectors=sectors or ["Energy", "Defense"],
+        )
+        kg_result = pipeline_result.get("kg_results", {})
+        pipeline_paths = pipeline_result.get("graph_paths", [])
+        grounded_facts = pipeline_result.get("grounded_facts", [])
+
+        path = self._build_reasoning_path(
+            entities, sectors, query,
+            pipeline_paths=pipeline_paths, grounded_facts=grounded_facts,
+        )
         summary = self._summarize_path(path, entities, sectors)
 
         graph_exp = GraphExplanation(
@@ -39,7 +51,7 @@ class GraphExplainer(BaseExplainer):
             path_summary=summary,
         )
 
-        return ExplanationResult(graph=graph_exp)
+        return ExplanationResult(graph=graph_exp, kg_facts=grounded_facts)
 
     def _extract_entities_from_query(self, query: str) -> list[str]:
         text_lower = query.lower()
@@ -58,9 +70,25 @@ class GraphExplainer(BaseExplainer):
             found = ["Geopolitical Event"]
         return found
 
-    def _build_reasoning_path(self, entities: list, sectors: list, query: str) -> list[GraphPathStep]:
+    def _build_reasoning_path(
+        self,
+        entities: list,
+        sectors: list,
+        query: str,
+        pipeline_paths: list[dict] | None = None,
+        grounded_facts: list[str] | None = None,
+    ) -> list[GraphPathStep]:
         path = []
         text_lower = query.lower()
+
+        if pipeline_paths:
+            for pp in pipeline_paths:
+                source = pp.get("source", pp.get("from", "Unknown"))
+                relation = pp.get("relation", pp.get("edge", "affects"))
+                target = pp.get("target", pp.get("to", "Market"))
+                path.append(GraphPathStep(source=source, relation=relation, target=target))
+            if path:
+                return path
 
         try:
             if self.neo4j.available:

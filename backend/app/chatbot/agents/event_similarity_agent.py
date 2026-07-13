@@ -3,10 +3,14 @@ import logging
 from typing import Any
 
 from ..event_memory.event_store import event_store
-from ..event_memory.event_schema import SimilarityResponse
 from ..explain.attention_explainer import AttentionExplainer
-from ..explain.graph_explainer import GraphExplainer
 from ..llm.provider import get_llm
+from ..pipeline_adapter import (
+    run_entity_extraction_pipeline,
+    run_similarity_pipeline,
+    run_historical_analogs_pipeline,
+    run_graph_path_pipeline,
+)
 from ..utils.constants import SECTOR_KEYWORDS
 
 logger = logging.getLogger(__name__)
@@ -16,70 +20,126 @@ class EventSimilarityAgent:
     def __init__(self):
         self.llm = get_llm()
         self.attention = AttentionExplainer()
-        self.graph_explainer = GraphExplainer()
 
     async def process(self, query: str, context: dict[str, Any] | None = None) -> dict[str, Any]:
-        entities = self._extract_entities(query)
+        entities = await self._extract_entities(query)
         sectors = self._extract_sectors(query)
 
-        result = event_store.find_similar(
-            query=query,
-            top_k=5,
-            sector_filter=sectors or None,
+        pipeline_result = await run_similarity_pipeline(query=query, content=query, top_k=20)
+
+        similar_events = pipeline_result.get("similar_events", [])
+        aggregated = pipeline_result.get("aggregated_outcomes", {})
+
+        analogs = await run_historical_analogs_pipeline(
+            sentiment=0.0,
+            event_type="economic",
         )
 
-        formatted = self._format_response(result, query)
+        path_result = await run_graph_path_pipeline(
+            entities=entities or ["Geopolitical Event"],
+            sectors=sectors or ["Energy", "Defense"],
+        )
+
+        formatted = self._format_response(similar_events, aggregated, analogs, query, pipeline_result.get("confidence", 0.5))
 
         ctx = context or {}
-        ctx.update({"query": query, "entities": entities, "sectors": sectors, "similar_events": result.similar_events})
-        attn_result = self.attention.explain(context=ctx)
-        graph_result = self.graph_explainer.explain(context=ctx)
+        ctx.update({
+            "query": query,
+            "entities": entities,
+            "sectors": sectors,
+            "similar_events": similar_events,
+        })
+        attn_result = await self.attention.explain(context=ctx)
         attn_formatted = self.attention.format_explanation(attn_result)
 
         return {
             "agent": "EventSimilarityAgent",
             "response": formatted,
-            "similarity_data": result.model_dump(),
+            "similarity_data": {
+                "similar_events": similar_events,
+                "aggregated_outcomes": aggregated,
+                "entities": entities,
+                "sectors": sectors,
+                "confidence": pipeline_result.get("confidence", 0.5),
+                "historical_analogs": analogs,
+                "graph_paths": path_result.get("graph_paths", []),
+            },
             "entities": entities,
             "explanations": {
                 "attention": attn_result.attention.model_dump() if attn_result.attention else None,
-                "graph": graph_result.graph.model_dump() if graph_result.graph else None,
+                "historical_analogs": analogs,
+                "graph_paths": path_result.get("graph_paths", []),
             },
             "explanation_text": attn_formatted,
         }
 
-    def _format_response(self, response: SimilarityResponse, query: str) -> str:
+    def _get_entity_name(self, ev: Any) -> str:
+        if isinstance(ev, dict):
+            return ev.get("title", ev.get("matched_event_id", ev.get("name", "Unknown")))
+        return getattr(ev, "name", "Unknown")
+
+    def _get_score(self, ev: Any) -> float:
+        if isinstance(ev, dict):
+            return ev.get("similarity_score", ev.get("score", 0))
+        return getattr(ev, "similarity_score", 0)
+
+    def _format_response(
+        self,
+        similar_events: list,
+        aggregated: dict[str, float],
+        analogs: list[dict],
+        query: str,
+        confidence: float = 0.5,
+    ) -> str:
         lines = []
         lines.append("## Historical Event Similarity Analysis")
         lines.append("")
         lines.append(f"**Query:** {query}")
         lines.append("")
-        lines.append("### Similar Historical Events")
-        lines.append("")
 
-        for i, result in enumerate(response.similar_events, 1):
-            ev = result.event
-            lines.append(f"**{i}. {ev.name}**")
-            lines.append(f"   - Overall Similarity: **{result.similarity_score*100:.0f}%**")
-            lines.append(f"   - Text Similarity: {result.text_similarity*100:.0f}% | "
-                         f"Entity Similarity: {result.entity_similarity*100:.0f}% | "
-                         f"Sector Similarity: {result.sector_similarity*100:.0f}%")
-            lines.append(f"   - Type: {ev.event_type.replace('_', ' ').title()} | Date: {ev.date}")
-            lines.append(f"   - {ev.summary}")
+        if similar_events:
+            lines.append("### Similar Historical Events")
+            lines.append("")
+            for i, ev in enumerate(similar_events[:5], 1):
+                name = self._get_entity_name(ev)
+                score = self._get_score(ev)
+                lines.append(f"**{i}. {name}**")
+                lines.append(f"   - Overall Similarity: **{score*100:.0f}%**")
+                payload = ev.get("payload", {}) if isinstance(ev, dict) else {}
+                if payload:
+                    sim = payload.get("similarity", 0)
+                    if sim:
+                        lines.append(f"   - Confidence: {sim*100:.0f}%")
+                outcome = ev.get("market_outcome", {}) if isinstance(ev, dict) else {}
+                if outcome:
+                    direction = outcome.get("direction", "neutral")
+                    conf = outcome.get("confidence", 0)
+                    lines.append(f"   - Market Direction: {direction} (confidence: {conf*100:.0f}%)")
+                lines.append("")
+
+        if analogs:
+            lines.append("### Historical Analogs (Explainability)")
+            lines.append("")
+            for a in analogs[:3]:
+                lines.append(f"- **{a['name']}** — similarity: {a['similarity_score']*100:.0f}%, type: {a['type']}, impact: {a['impact']}")
             lines.append("")
 
-        if response.aggregated_outcomes:
+        if aggregated:
             lines.append("### Aggregated Historical Outcomes")
             lines.append("")
             lines.append("| Sector | Impact |")
             lines.append("|--------|--------|")
-            for sector, impact in sorted(response.aggregated_outcomes.items(), key=lambda x: abs(x[1]), reverse=True):
+            for sector, impact in sorted(aggregated.items(), key=lambda x: abs(x[1]), reverse=True):
                 sign = "+" if impact > 0 else ""
                 lines.append(f"| {sector} | {sign}{impact}% |")
             lines.append("")
-            lines.append(f"*Based on top {min(len(response.similar_events), 3)} most similar events*")
+
+        if not similar_events and not analogs:
+            lines.append("No significant historical parallels found for this query.")
             lines.append("")
-            lines.append(f"**Confidence:** {response.confidence*100:.0f}%")
+
+        if similar_events:
+            lines.append(f"**Confidence:** {confidence*100:.0f}%")
 
         return "\n".join(lines)
 
@@ -95,6 +155,7 @@ class EventSimilarityAgent:
     ) -> str:
         similar = similarity_data.get("similar_events", []) if similarity_data else []
         outcomes = similarity_data.get("aggregated_outcomes", {}) if similarity_data else {}
+        analogs = similarity_data.get("historical_analogs", []) if similarity_data else []
 
         lines = []
         lines.append("# MarketAtlas Intelligence Report")
@@ -102,18 +163,22 @@ class EventSimilarityAgent:
         lines.append(f"## Query: {query}")
         lines.append("")
 
-        similar_events = similar[:3] if similar else []
-        if similar_events:
+        if similar:
             lines.append("### Similar Historical Events")
             lines.append("")
-            for i, ev_data in enumerate(similar_events, 1):
-                ev = ev_data.get("event", {}) if isinstance(ev_data, dict) else getattr(ev_data, "event", {})
-                name = ev.get("name", "Unknown") if isinstance(ev, dict) else getattr(ev, "name", "Unknown")
-                score = ev_data.get("similarity_score", 0) if isinstance(ev_data, dict) else getattr(ev_data, "similarity_score", 0)
-                score_pct = score * 100 if isinstance(score, float) and score <= 1 else score
+            for i, ev in enumerate(similar[:3], 1):
+                name = self._get_entity_name(ev)
+                score = self._get_score(ev)
                 lines.append(f"{i}. {name}")
-                lines.append(f"   Similarity: **{score_pct:.0f}%**")
+                lines.append(f"   Similarity: **{score*100:.0f}%**")
                 lines.append("")
+
+        if analogs:
+            lines.append("### Historical Analogs")
+            lines.append("")
+            for a in analogs[:3]:
+                lines.append(f"- **{a['name']}** — {a['similarity_score']*100:.0f}% match")
+            lines.append("")
 
         if outcomes:
             lines.append("### Historical Outcomes")
@@ -156,16 +221,12 @@ class EventSimilarityAgent:
 
         return "\n".join(lines)
 
-    def _extract_entities(self, text: str) -> list[str]:
-        prompt = f"""Extract all geopolitical entities (countries, regions, organizations, people, militant groups) from this query.
-Return ONLY a JSON array of strings.
-Query: {text}"""
+    async def _extract_entities(self, text: str) -> list[str]:
         try:
-            result = self.llm.generate(prompt, temperature=0.1)
-            result = result.strip().strip("```json").strip("```").strip()
-            return json.loads(result) if result.startswith("[") else []
+            result = await run_entity_extraction_pipeline(text)
         except Exception:
-            return []
+            result = {"countries": [], "organizations": []}
+        return result.get("countries", []) + result.get("organizations", [])
 
     def _extract_sectors(self, text: str) -> list[str]:
         text_lower = text.lower()

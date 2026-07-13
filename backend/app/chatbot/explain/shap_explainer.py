@@ -1,5 +1,6 @@
 from typing import Any
 
+from ..pipeline_adapter import run_shap_pipeline
 from .base import BaseExplainer
 from .models import SHAPExplanation, FeatureContribution, ExplanationResult
 
@@ -8,32 +9,58 @@ class SHAPExplainer(BaseExplainer):
     def __init__(self):
         self._rng = __import__("numpy", fromlist=["random"]).random.default_rng(42)
 
-    def explain(self, prediction: str = "", context: dict[str, Any] | None = None) -> ExplanationResult:
+    async def explain(self, prediction: str = "", context: dict[str, Any] | None = None) -> ExplanationResult:
         ctx = context or {}
         query = ctx.get("query", ctx.get("original_query", ""))
         entities = ctx.get("entities", [])
         sectors = ctx.get("sectors", [])
         similar_events = ctx.get("similar_events", [])
         market_data = ctx.get("market_data", {})
+        features = ctx.get("features", [])
 
-        contributions = self._compute_contributions(query, entities, sectors, similar_events, market_data)
+        shap_data = await run_shap_pipeline(query=query, features=features)
+
+        contributions = self._compute_contributions(
+            query, entities, sectors, similar_events, market_data, shap_data,
+        )
         predicted_change = sum(c.impact_pct for c in contributions)
         shap_exp = SHAPExplanation(
             prediction=prediction or "Market impact analysis",
             predicted_change_pct=round(predicted_change, 1),
-            base_value=0.0,
+            base_value=shap_data.get("base_value", 0.0),
             contributions=contributions,
         )
 
         return ExplanationResult(shap=shap_exp)
 
-    def _compute_contributions(self, query: str, entities: list, sectors: list, similar_events: list, market_data: dict) -> list[FeatureContribution]:
+    def _fmt(self, shap_data: dict) -> str:
+        top = shap_data.get("top_feature", {})
+        return f"SHAP: top feature {top.get('feature', '?')} = {top.get('shap_value', 0):.3f}"
+
+    def _compute_contributions(
+        self,
+        query: str,
+        entities: list,
+        sectors: list,
+        similar_events: list,
+        market_data: dict,
+        shap_data: dict,
+    ) -> list[FeatureContribution]:
         contributions = []
         text_lower = query.lower()
 
+        pipeline_features = shap_data.get("features", [])
+        if pipeline_features:
+            for f in pipeline_features[:3]:
+                contributions.append(FeatureContribution(
+                    feature=f.get("feature", "Unknown"),
+                    impact_pct=round(abs(f.get("shap_value", 0)) * 20, 1),
+                    direction=f.get("impact", "neutral"),
+                ))
+
         conflict_phrases = ["conflict", "war", "attack", "tension", "strike", "escalation", "invasion"]
         conflict_score = sum(1 for p in conflict_phrases if p in text_lower)
-        if conflict_score > 0:
+        if conflict_score > 0 and not any(c.feature == "Conflict Severity" for c in contributions):
             base = min(conflict_score * 1.5, 4.0)
             jitter = self._rng.uniform(-0.3, 0.3)
             contributions.append(FeatureContribution(
@@ -42,7 +69,8 @@ class SHAPExplainer(BaseExplainer):
                 direction="positive",
             ))
 
-        if any(w in text_lower for w in ["shipping", "supply chain", "port", "trade route", "disruption"]):
+        if any(w in text_lower for w in ["shipping", "supply chain", "port", "trade route", "disruption"]) and \
+           not any(c.feature == "Shipping Disruption" for c in contributions):
             base = self._rng.uniform(1.5, 3.0)
             contributions.append(FeatureContribution(
                 feature="Shipping Disruption",
@@ -50,39 +78,14 @@ class SHAPExplainer(BaseExplainer):
                 direction="positive",
             ))
 
-        if any(w in text_lower for w in ["oil", "gas", "energy", "petroleum", "crude"]):
+        if any(w in text_lower for w in ["oil", "gas", "energy", "petroleum", "crude"]) and \
+           not any(c.feature == "Energy Supply Risk" for c in contributions):
             base = self._rng.uniform(2.0, 4.0)
             contributions.append(FeatureContribution(
                 feature="Energy Supply Risk",
                 impact_pct=round(base, 1),
                 direction="positive",
             ))
-
-        if any(w in text_lower for w in ["sanction", "tariff", "embargo", "trade war"]):
-            base = self._rng.uniform(1.0, 3.0)
-            contributions.append(FeatureContribution(
-                feature="Sanctions Impact",
-                impact_pct=round(base, 1),
-                direction="positive",
-            ))
-
-        if similar_events:
-            avg_sim = 0.0
-            count = 0
-            for ev in similar_events[:3]:
-                s = ev.get("similarity_score", 0) if isinstance(ev, dict) else getattr(ev, "similarity_score", 0)
-                if s:
-                    avg_sim += s
-                    count += 1
-            if count > 0:
-                avg_sim /= count
-                base = round(avg_sim * 20, 1)
-                if base > 0:
-                    contributions.append(FeatureContribution(
-                        feature="Historical Analog Events",
-                        impact_pct=base,
-                        direction="positive",
-                    ))
 
         for ticker, data in market_data.items():
             if isinstance(data, dict) and "price_change_pct" in data:

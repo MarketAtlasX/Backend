@@ -8,6 +8,8 @@ from sqlalchemy import text
 from app.cache import cache
 from app.chatbot.api.routes import chat_router
 from app.chatbot.api.websocket import handle_websocket as chat_ws_handler
+from app.chatbot.llm.provider import get_llm, MockLLM
+from app.chatbot.pipeline_adapter import run_daily_pipeline
 from app.config import settings
 from app.database import AsyncSessionLocal, close_db
 from app.middleware import MetricsMiddleware, RequestLoggingMiddleware
@@ -58,11 +60,35 @@ async def lifespan(app: FastAPI):
     market_stream = MarketStreamService(broadcaster)
     stream_tasks.append(asyncio.create_task(market_stream.run(), name="market-stream"))
 
+    llm = get_llm()
+    llm_provider = type(llm).__name__
+    is_mock = isinstance(llm, MockLLM)
+    if is_mock:
+        logger.warning(
+            "⚠ No real LLM available! Chatbot will use MockLLM (keyword templates). "
+            "Set GEMINI_API_KEY, OPENAI_API_KEY, or CLAUDE_API_KEY in .env, "
+            "or ensure Ollama is running with 'ollama pull qwen2.5:7b && ollama run qwen2.5:7b'"
+        )
+    else:
+        logger.info("LLM provider: %s", llm_provider)
+
+    async def _daily_pipeline_worker():
+        logger.info("Starting daily GDELT -> signals pipeline...")
+        try:
+            result = await run_daily_pipeline()
+            status = result.get("status", "unknown")
+            logger.info("Daily pipeline: status=%s", status)
+        except Exception as exc:
+            logger.warning("Daily pipeline failed (non-fatal): %s", exc)
+
+    stream_tasks.append(asyncio.create_task(_daily_pipeline_worker(), name="daily-pipeline"))
+
     logger.info(
-        "MarketAtlas v%s started (workers=%s, streaming=%d)",
+        "MarketAtlas v%s started (workers=%s, streaming=%d, llm=%s)",
         settings.api_version,
         "enabled" if settings.enable_workers else "disabled",
         len(stream_tasks),
+        llm_provider,
     )
     yield
 
@@ -128,6 +154,10 @@ async def health_check() -> dict:
 
     redis_ok = cache._redis is not None
 
+    llm = get_llm()
+    llm_provider = type(llm).__name__
+    is_mock = isinstance(llm, MockLLM)
+
     return {
         "status": "healthy" if db_ok else "degraded",
         "service": "MarketAtlas",
@@ -136,5 +166,6 @@ async def health_check() -> dict:
             "database": "ok" if db_ok else "down",
             "redis": "ok" if redis_ok else "unavailable",
             "workers": "enabled" if settings.enable_workers else "disabled",
+            "llm": f"⚠ MOCK — no real LLM configured" if is_mock else f"ok ({llm_provider})",
         },
     }

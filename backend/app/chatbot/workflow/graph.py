@@ -277,7 +277,7 @@ async def execute_direct(state: AgentState) -> AgentState:
     return state
 
 
-def calculate_confidence(state: AgentState) -> AgentState:
+async def calculate_confidence(state: AgentState) -> AgentState:
     _ensure_context(state)
     base = state["intent_confidence"]
     num_responses = len(state["agent_responses"])
@@ -290,21 +290,21 @@ def calculate_confidence(state: AgentState) -> AgentState:
 
     explanations = {}
     try:
-        shap_result = shap_explainer.explain(prediction=intent.value, context={"query": query, "market_data": ctx.get("market_data", {})})
+        shap_result = await shap_explainer.explain(prediction=intent.value, context={"query": query, "market_data": ctx.get("market_data", {})})
         if shap_result.shap:
             explanations["shap"] = shap_result.shap.model_dump()
     except Exception:
         pass
 
     try:
-        attn_result = attention_explainer.explain(context={"query": query, "similar_events": ctx.get("similarity", {}).get("similar_events", [])})
+        attn_result = await attention_explainer.explain(context={"query": query, "similar_events": ctx.get("similarity", {}).get("similar_events", [])})
         if attn_result.attention:
             explanations["attention"] = attn_result.attention.model_dump()
     except Exception:
         pass
 
     try:
-        graph_result = graph_explainer.explain(context={"query": query, "entities": ctx.get("entities", [])})
+        graph_result = await graph_explainer.explain(context={"query": query, "entities": ctx.get("entities", [])})
         if graph_result.graph:
             explanations["graph"] = graph_result.graph.model_dump()
     except Exception:

@@ -37,6 +37,23 @@ elif [ "$STARTED" = false ]; then
   echo "[docker] Already running."
 fi
 
+# ── 1b. Symlink pipelines package (if not already) ───────────────────
+PY_VER="$("$ROOT/venv/bin/python" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
+PIPELINES_SYMLINK="$ROOT/venv/lib/python$PY_VER/site-packages/pipelines"
+if [ -d "$HOME/pipelines" ] && [ ! -L "$PIPELINES_SYMLINK" ]; then
+  echo "[pipelines] Installing pipelines package..."
+  ln -sf "$HOME/pipelines" "$PIPELINES_SYMLINK"
+fi
+
+# ── 1c. Pre-load Ollama model (so first request doesn't time out) ────
+if command -v ollama &>/dev/null; then
+  if ollama list 2>/dev/null | grep -q "qwen2.5:7b"; then
+    echo "[ollama] Pre-loading qwen2.5:7b model..."
+    # Send a trivial warm-up request; background so it doesn't block startup
+    (ollama run qwen2.5:7b "Hello" 2>/dev/null || true) &
+  fi
+fi
+
 # ── 2. Backend (FastAPI) ────────────────────────────────────────────
 echo "[backend] Starting on :8000..."
 BACKEND_PY="$ROOT/venv/bin/uvicorn"

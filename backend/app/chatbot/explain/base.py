@@ -6,7 +6,7 @@ from .models import ExplanationResult
 
 class BaseExplainer(ABC):
     @abstractmethod
-    def explain(self, prediction: str, context: dict[str, Any] | None = None) -> ExplanationResult:
+    async def explain(self, prediction: str = "", context: dict[str, Any] | None = None) -> ExplanationResult:
         ...
 
     def format_explanation(self, result: ExplanationResult) -> str:
