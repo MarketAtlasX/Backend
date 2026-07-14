@@ -16,7 +16,7 @@ from app.services.world_state_client import world_state_client
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/v1/world-state", tags=["world-state"])
+router = APIRouter(prefix="/world-state", tags=["world-state"])
 
 
 @router.get("/summary")

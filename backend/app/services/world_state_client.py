@@ -27,13 +27,14 @@ class WorldStateClient:
 
     def __init__(self, base_url: str = "") -> None:
         self._base_url = (base_url or settings.world_state_url).rstrip("/")
+        self._headers = {"X-World-State-Key": settings.world_state_api_key}
 
     # ── GET helpers ─────────────────────────────────────────────────────
 
     async def _get(self, path: str, timeout: float = 10.0) -> dict[str, Any] | None:
         try:
             async with httpx.AsyncClient(timeout=timeout) as client:
-                resp = await client.get(f"{self._base_url}{path}")
+                resp = await client.get(f"{self._base_url}{path}", headers=self._headers)
             resp.raise_for_status()
             return resp.json()
         except httpx.TimeoutException:
@@ -47,7 +48,7 @@ class WorldStateClient:
     async def _post(self, path: str, json: Any, timeout: float = 10.0) -> dict[str, Any] | None:
         try:
             async with httpx.AsyncClient(timeout=timeout) as client:
-                resp = await client.post(f"{self._base_url}{path}", json=json)
+                resp = await client.post(f"{self._base_url}{path}", json=json, headers=self._headers)
             resp.raise_for_status()
             return resp.json()
         except httpx.TimeoutException:

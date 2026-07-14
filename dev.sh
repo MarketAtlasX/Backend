@@ -40,9 +40,13 @@ fi
 # ── 1b. Symlink pipelines package (if not already) ───────────────────
 PY_VER="$("$ROOT/venv/bin/python" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
 PIPELINES_SYMLINK="$ROOT/venv/lib/python$PY_VER/site-packages/pipelines"
-if [ -d "$HOME/pipelines" ] && [ ! -L "$PIPELINES_SYMLINK" ]; then
+PIPELINES_DIR=""
+for d in "$ROOT/../pipelines" "$HOME/pipelines"; do
+  [ -d "$d" ] && PIPELINES_DIR="$d" && break
+done
+if [ -n "$PIPELINES_DIR" ] && [ ! -L "$PIPELINES_SYMLINK" ]; then
   echo "[pipelines] Installing pipelines package..."
-  ln -sf "$HOME/pipelines" "$PIPELINES_SYMLINK"
+  ln -sf "$PIPELINES_DIR" "$PIPELINES_SYMLINK"
 fi
 
 # ── 1c. Pre-load Ollama model (so first request doesn't time out) ────
@@ -83,12 +87,24 @@ for d in "$ROOT/../market_agents" "$HOME/market_agents"; do
   [ -d "$d" ] && MARKET_DIR="$d" && break
 done
 if [ -n "$MARKET_DIR" ]; then
-  echo "[market-agents] Starting gateway on :8004..."
+  echo "[market-agents] Starting market, impact, recommendation, and gateway services..."
   MARKET_PY="$MARKET_DIR/venv/bin/uvicorn"
   if [ -f "$MARKET_PY" ]; then
-    (cd "$MARKET_DIR" && PYTHONPATH="$MARKET_DIR" "$MARKET_PY" services.gateway:app --reload --port 8004) &
+    (cd "$MARKET_DIR" && PYTHONPATH="$(dirname "$MARKET_DIR")" "$MARKET_PY" services.market_data.app:app --reload --port 8001) &
+    PIDS+=($!)
+    (cd "$MARKET_DIR" && PYTHONPATH="$(dirname "$MARKET_DIR")" "$MARKET_PY" services.impact.app:app --reload --port 8002) &
+    PIDS+=($!)
+    (cd "$MARKET_DIR" && PYTHONPATH="$(dirname "$MARKET_DIR")" "$MARKET_PY" services.recommendation.app:app --reload --port 8003) &
+    PIDS+=($!)
+    (cd "$MARKET_DIR" && PYTHONPATH="$(dirname "$MARKET_DIR")" "$MARKET_PY" services.gateway:app --reload --port 8004) &
   else
-    (cd "$MARKET_DIR" && uvicorn services.gateway:app --reload --port 8004) &
+    (cd "$MARKET_DIR" && PYTHONPATH="$(dirname "$MARKET_DIR")" uvicorn services.market_data.app:app --reload --port 8001) &
+    PIDS+=($!)
+    (cd "$MARKET_DIR" && PYTHONPATH="$(dirname "$MARKET_DIR")" uvicorn services.impact.app:app --reload --port 8002) &
+    PIDS+=($!)
+    (cd "$MARKET_DIR" && PYTHONPATH="$(dirname "$MARKET_DIR")" uvicorn services.recommendation.app:app --reload --port 8003) &
+    PIDS+=($!)
+    (cd "$MARKET_DIR" && PYTHONPATH="$(dirname "$MARKET_DIR")" uvicorn services.gateway:app --reload --port 8004) &
   fi
   PIDS+=($!)
 else
@@ -102,11 +118,16 @@ for d in "$ROOT/../world_state" "$HOME/world_state"; do
 done
 if [ -n "$WS_DIR" ]; then
   echo "[world-state] Starting on :8006..."
+  WORLD_STATE_API_KEY="$(awk -F= '/^WORLD_STATE_API_KEY=/{print substr($0, index($0, "=") + 1); exit}' "$ROOT/backend/.env")"
+  if [ -z "$WORLD_STATE_API_KEY" ]; then
+    echo "[world-state] WORLD_STATE_API_KEY is required in backend/.env." >&2
+    exit 1
+  fi
   WS_PY="$WS_DIR/venv/bin/uvicorn"
   if [ -f "$WS_PY" ]; then
-    (cd "$WS_DIR" && PYTHONPATH="$WS_DIR" "$WS_PY" world_state.server:app --reload --port 8006) &
+    (cd "$WS_DIR" && PYTHONPATH="$WS_DIR" WORLD_STATE_API_KEY="$WORLD_STATE_API_KEY" "$WS_PY" world_state.server:app --reload --port 8006) &
   else
-    (cd "$WS_DIR" && PYTHONPATH="$WS_DIR" uvicorn world_state.server:app --reload --port 8006) &
+    (cd "$WS_DIR" && PYTHONPATH="$WS_DIR" WORLD_STATE_API_KEY="$WORLD_STATE_API_KEY" uvicorn world_state.server:app --reload --port 8006) &
   fi
   PIDS+=($!)
 else

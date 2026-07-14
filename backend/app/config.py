@@ -1,4 +1,6 @@
-from pydantic import Field, computed_field
+from pathlib import Path
+
+from pydantic import Field, computed_field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -12,7 +14,7 @@ class Settings(BaseSettings):
     """
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=Path(__file__).resolve().parents[1] / ".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
@@ -85,7 +87,7 @@ class Settings(BaseSettings):
     # -------------------------------------------------------------------------
     # Auth Configuration
     # -------------------------------------------------------------------------
-    jwt_secret: str = Field(alias="JWT_SECRET", default="change-me-in-production")
+    jwt_secret: str = Field(alias="JWT_SECRET")
     jwt_algorithm: str = Field(alias="JWT_ALGORITHM", default="HS256")
     jwt_expiry_hours: int = Field(alias="JWT_EXPIRY_HOURS", default=24)
 
@@ -111,11 +113,18 @@ class Settings(BaseSettings):
         alias="WORLD_STATE_URL",
         description="Base URL of the Dynamic World State service",
     )
+    world_state_api_key: str = Field(alias="WORLD_STATE_API_KEY")
 
     # -------------------------------------------------------------------------
     # Feature Flags
     # -------------------------------------------------------------------------
     enable_workers: bool = Field(default=False, alias="ENABLE_WORKERS")
+
+    @model_validator(mode="after")
+    def reject_insecure_jwt_secret(self) -> "Settings":
+        if self.jwt_secret == "change-me-in-production":
+            raise ValueError("JWT_SECRET must not use the placeholder value")
+        return self
 
     # -------------------------------------------------------------------------
     # Computed properties

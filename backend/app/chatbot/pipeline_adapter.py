@@ -10,9 +10,8 @@ import logging
 from datetime import datetime
 from typing import Any
 
-from pipelines import build_pipelines
-from pipelines import Event as PipelineEvent
-from pipelines import Context as PipelineContext
+from pipelines.core.types import Context as PipelineContext
+from pipelines.core.types import Event as PipelineEvent
 from pipelines.core.types import PipelineType
 
 logger = logging.getLogger(__name__)
@@ -23,6 +22,8 @@ _factory = None
 async def _get_factory():
     global _factory
     if _factory is None:
+        from pipelines import build_pipelines
+
         _factory = build_pipelines()
     return _factory
 
