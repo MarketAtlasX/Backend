@@ -38,5 +38,45 @@ services:
       - "8006:8006"
     command: uvicorn world_state.server:app --host 0.0.0.0 --port 8006
 
+  qdrant:
+    image: qdrant/qdrant:latest
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+
+  neo4j:
+    image: neo4j:5-community
+    environment:
+      NEO4J_AUTH: neo4j/password
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    volumes:
+      - neo4j_data:/data
+
+  memory:
+    build:
+      context: ..
+      dockerfile: memory/Dockerfile
+    depends_on:
+      - db
+      - redis
+      - qdrant
+      - neo4j
+    env_file:
+      - .env
+    environment:
+      MATLAS_POSTGRES_DSN: postgresql+asyncpg://postgres:postgres@db:5432/marketatlas
+      MATLAS_REDIS_URL: redis://redis:6379/0
+      MATLAS_QDRANT_URL: http://qdrant:6333
+      MATLAS_NEO4J_URI: bolt://neo4j:7687
+    ports:
+      - "8010:8010"
+    command: uvicorn main:app --host 0.0.0.0 --port 8010
+
 volumes:
   pgdata:
+  qdrant_data:
+  neo4j_data:

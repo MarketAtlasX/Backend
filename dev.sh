@@ -62,9 +62,9 @@ fi
 echo "[backend] Starting on :8000..."
 BACKEND_PY="$ROOT/venv/bin/uvicorn"
 if [ -f "$BACKEND_PY" ]; then
-  (cd "$ROOT/backend" && PYTHONPATH="$ROOT/backend" "$BACKEND_PY" app.main:app --reload --port 8000) &
+  (cd "$ROOT/backend" && PYTHONPATH="$ROOT/backend:$ROOT/.." "$BACKEND_PY" app.main:app --reload --port 8000) &
 else
-  (cd "$ROOT/backend" && uvicorn app.main:app --reload --port 8000) &
+  (cd "$ROOT/backend" && PYTHONPATH="$ROOT/backend:$ROOT/.." uvicorn app.main:app --reload --port 8000) &
 fi
 PIDS+=($!)
 
@@ -125,13 +125,48 @@ if [ -n "$WS_DIR" ]; then
   fi
   WS_PY="$WS_DIR/venv/bin/uvicorn"
   if [ -f "$WS_PY" ]; then
-    (cd "$WS_DIR" && PYTHONPATH="$WS_DIR" WORLD_STATE_API_KEY="$WORLD_STATE_API_KEY" "$WS_PY" world_state.server:app --reload --port 8006) &
+    (cd "$WS_DIR" && PYTHONPATH="$WS_DIR/.." WORLD_STATE_API_KEY="$WORLD_STATE_API_KEY" "$WS_PY" world_state.server:app --reload --port 8006) &
   else
-    (cd "$WS_DIR" && PYTHONPATH="$WS_DIR" WORLD_STATE_API_KEY="$WORLD_STATE_API_KEY" uvicorn world_state.server:app --reload --port 8006) &
+    (cd "$WS_DIR" && PYTHONPATH="$WS_DIR/.." WORLD_STATE_API_KEY="$WORLD_STATE_API_KEY" uvicorn world_state.server:app --reload --port 8006) &
   fi
   PIDS+=($!)
 else
   echo "[world-state] Not found, skipping."
+fi
+
+# ── 6b. Memory Service (optional) ──────────────────────────────────────
+MEMORY_DIR=""
+for d in "$ROOT/../memory" "$HOME/memory"; do
+  [ -d "$d" ] && MEMORY_DIR="$d" && break
+done
+if [ -n "$MEMORY_DIR" ]; then
+  echo "[memory] Starting on :8010..."
+  if command -v uvicorn &>/dev/null; then
+    (cd "$MEMORY_DIR" && PYTHONPATH="$MEMORY_DIR" uvicorn main:app --reload --port 8010) &
+  else
+    echo "[memory] uvicorn not found, skipping." >&2
+  fi
+  PIDS+=($!)
+else
+  echo "[memory] Not found, skipping."
+fi
+
+# ── 6c. Graph Engine (optional) ───────────────────────────────────────
+GE_DIR=""
+for d in "$ROOT/../graph_engine" "$HOME/graph_engine"; do
+  [ -d "$d" ] && GE_DIR="$d" && break
+done
+if [ -n "$GE_DIR" ]; then
+  echo "[graph-engine] Starting on :8005..."
+  GE_PY="$ROOT/venv/bin/uvicorn"
+  if [ -f "$GE_PY" ]; then
+    (cd "$GE_DIR" && PYTHONPATH="$GE_DIR/.." "$GE_PY" graph_engine.main:app --reload --port 8005) &
+  else
+    (cd "$GE_DIR" && PYTHONPATH="$GE_DIR/.." uvicorn graph_engine.main:app --reload --port 8005) &
+  fi
+  PIDS+=($!)
+else
+  echo "[graph-engine] Not found, skipping."
 fi
 
 # ── 6. KG Agent (optional) ──────────────────────────────────────────
@@ -159,7 +194,9 @@ echo "  Backend:   http://localhost:8000"
 echo "  Frontend:  http://localhost:5173"
 echo "  Market:    http://localhost:8004  (if found)"
 echo "  World St:  http://localhost:8006  (if found)"
-echo "  KG Agent:  http://localhost:8005  (if found)"
+echo "  Memory:    http://localhost:8010  (if found)"
+echo "  Graph:     http://localhost:8005  (if found)"
+echo "  KG Agent:  http://localhost:8005  (if found, conflicts with Graph)"
 echo "═══════════════════════════════════════════════════════"
 echo "  Press Ctrl+C to stop everything."
 echo ""

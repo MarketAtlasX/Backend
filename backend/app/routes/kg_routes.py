@@ -8,6 +8,7 @@ from app.database import get_db
 from app.models.event import Event
 from app.repositories.entity import EntityRepository
 from app.services.kg_service import analyze_stock_knowledge_graph
+from app.services.memory_client import memory_client
 
 router = APIRouter(prefix="/events/{event_id}", tags=["knowledge-graph"])
 
@@ -57,6 +58,33 @@ async def get_knowledge_graph(
             continue
 
         kg = await analyze_stock_knowledge_graph(ticker)
+
+        try:
+            news_titles = [n.title for n in kg.news[:3]] if kg.news else []
+            entity_names = [e.entity for e in kg.entities[:10]] if kg.entities else []
+            await memory_client.create_episode(
+                articles=[{
+                    "title": f"KG: {ticker} knowledge graph for event {event_id}",
+                    "summary": (
+                        f"Analysis for {entity.name} ({ticker}): "
+                        f"{len(kg.news)} news articles, "
+                        f"{len(kg.entities)} entities, "
+                        f"{len(kg.graph_nodes)} graph nodes, "
+                        f"{len(kg.graph_edges)} relationships. "
+                        f"Top entities: {', '.join(entity_names)}. "
+                        f"Top news: {'; '.join(news_titles)}."
+                    ),
+                    "entities": entity_names,
+                    "sectors": [entity.name],
+                    "source": "kg_agent",
+                    "ticker": ticker,
+                    "event_id": event_id,
+                }],
+            )
+            logger.info("Stored KG analysis in memory for %s", ticker)
+        except Exception as e:
+            logger.warning("Failed to store KG analysis in memory: %s", e)
+
         return KnowledgeGraphResponse(
             event_id=event_id,
             ticker=ticker,

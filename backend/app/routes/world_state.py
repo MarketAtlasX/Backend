@@ -12,6 +12,7 @@ from typing import Any
 
 from fastapi import APIRouter, Query
 
+from app.services.memory_client import memory_client
 from app.services.world_state_client import world_state_client
 
 logger = logging.getLogger(__name__)
@@ -66,7 +67,34 @@ async def get_snapshots(limit: int = Query(100, ge=1, le=1000)) -> dict[str, Any
 
 @router.post("/ingest")
 async def ingest_event(event: dict[str, Any]) -> dict[str, Any]:
-    return await world_state_client.ingest_event(event)
+    result = await world_state_client.ingest_event(event)
+
+    if result and not result.get("error"):
+        try:
+            title = event.get("title", event.get("event_type", "Unknown Event"))
+            summary = event.get("description", event.get("summary", ""))
+            locations = event.get("locations", [])
+            if isinstance(locations, str):
+                locations = [locations]
+            sectors = event.get("sectors", event.get("affected_sectors", []))
+            if isinstance(sectors, str):
+                sectors = [sectors]
+
+            await memory_client.create_episode(
+                articles=[{
+                    "title": title,
+                    "summary": summary,
+                    "locations": locations,
+                    "sectors": sectors,
+                    "timestamp": event.get("timestamp", ""),
+                    "source": "world_state",
+                }],
+            )
+            logger.info("Stored world_state ingest event in memory: %s", title)
+        except Exception as e:
+            logger.warning("Failed to store ingest event in memory: %s", e)
+
+    return result
 
 
 @router.post("/seed")

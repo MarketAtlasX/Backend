@@ -14,6 +14,7 @@ from app.schemas.event import EventRead
 from app.schemas.signal import SignalUpdate
 from app.services.ai_service import ai_service
 from app.services.kg_service import analyze_stock_knowledge_graph
+from app.services.memory_client import memory_client
 from app.services.signal_service import SignalService
 
 router = APIRouter(prefix="/events", tags=["analysis"])
@@ -113,6 +114,27 @@ async def analyze_event(
                 )
 
         signals.append(signal)
+
+        try:
+            await memory_client.create_episode(
+                articles=[{
+                    "title": f"Analysis: {event.title} - {entity.name}",
+                    "summary": f"Signal: {signal.signal_type.value} | "
+                               f"Confidence: {signal.confidence} | "
+                               f"Risk: {result.composite_risk:.2f} | "
+                               f"Reasoning: {result.reasoning[:500]}",
+                    "entities": [entity.name],
+                    "sectors": [event.event_type] if event.event_type else [],
+                    "locations": [],
+                    "source": "market_agents",
+                    "signal_type": signal.signal_type.value,
+                    "confidence": float(signal.confidence),
+                    "composite_risk": result.composite_risk,
+                }],
+            )
+            logger.info("Stored market_agents analysis in memory for event %s", event.id)
+        except Exception as e:
+            logger.warning("Failed to store market_agents analysis in memory: %s", e)
 
     return AnalyzeEventResponse(
         event=EventRead.model_validate(event),

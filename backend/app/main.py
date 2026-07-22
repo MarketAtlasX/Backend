@@ -3,6 +3,7 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import APIRouter, FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
 from app.cache import cache
@@ -23,8 +24,10 @@ from app.routes import (
     entity_router,
     event_router,
     globe_router,
+    graph_engine_router,
     kg_router,
     market_price_router,
+    memory_router,
     signal_router,
     world_state_router,
     ws_router,
@@ -58,8 +61,14 @@ async def lifespan(app: FastAPI):
 
     stream_tasks = []
 
-    market_stream = MarketStreamService(broadcaster)
-    stream_tasks.append(asyncio.create_task(market_stream.run(), name="market-stream"))
+    async def _run_market_stream():
+        try:
+            market_stream = MarketStreamService(broadcaster)
+            await market_stream.run()
+        except Exception as exc:
+            logger.warning("Market stream failed to start (non-fatal): %s", exc)
+
+    stream_tasks.append(asyncio.create_task(_run_market_stream(), name="market-stream"))
 
     llm = get_llm()
     llm_provider = type(llm).__name__
@@ -76,9 +85,11 @@ async def lifespan(app: FastAPI):
     async def _daily_pipeline_worker():
         logger.info("Starting daily GDELT -> signals pipeline...")
         try:
-            result = await run_daily_pipeline()
+            result = await asyncio.wait_for(run_daily_pipeline(), timeout=30.0)
             status = result.get("status", "unknown")
             logger.info("Daily pipeline: status=%s", status)
+        except asyncio.TimeoutError:
+            logger.warning("Daily pipeline timed out after 30s (non-fatal)")
         except Exception as exc:
             logger.warning("Daily pipeline failed (non-fatal): %s", exc)
 
@@ -109,6 +120,13 @@ app = FastAPI(
 )
 
 # Register middleware (order matters: outermost first)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[settings.cors_origins],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 app.add_middleware(RateLimitMiddleware, max_requests=200, window_seconds=60)
 app.add_middleware(RequestLoggingMiddleware)
 app.add_middleware(MetricsMiddleware)
@@ -127,6 +145,8 @@ api_v1_router.include_router(country_router)
 api_v1_router.include_router(dashboard_router)
 api_v1_router.include_router(globe_router)       # /relations/trade, /relations/military, /ports
 api_v1_router.include_router(world_state_router)
+api_v1_router.include_router(memory_router)
+api_v1_router.include_router(graph_engine_router)
 api_v1_router.include_router(backtest_router)
 app.include_router(api_v1_router)
 

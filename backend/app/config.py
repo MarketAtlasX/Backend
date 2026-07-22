@@ -116,6 +116,35 @@ class Settings(BaseSettings):
     world_state_api_key: str = Field(alias="WORLD_STATE_API_KEY")
 
     # -------------------------------------------------------------------------
+    # Memory Service (external microservice from separate repo)
+    # Runs as ``uvicorn main:app --port 8010`` in ../memory/
+    # -------------------------------------------------------------------------
+    memory_url: str = Field(
+        default="http://localhost:8010",
+        alias="MEMORY_URL",
+        description="Base URL of the Geopolitical Episodic Memory (GEM) service",
+    )
+
+    # -------------------------------------------------------------------------
+    # Graph Engine Service (external microservice from separate repo)
+    # Runs as ``uvicorn graph_engine.main:app --port 8005`` in ../graph_engine/
+    # -------------------------------------------------------------------------
+    graph_engine_url: str = Field(
+        default="http://localhost:8005",
+        alias="GRAPH_ENGINE_URL",
+        description="Base URL of the Graph Engine service",
+    )
+
+    # -------------------------------------------------------------------------
+    # CORS
+    # -------------------------------------------------------------------------
+    cors_origins: str = Field(
+        default="http://localhost:5173,http://localhost:3000",
+        alias="CORS_ORIGINS",
+        description="Comma-separated list of allowed CORS origins",
+    )
+
+    # -------------------------------------------------------------------------
     # Feature Flags
     # -------------------------------------------------------------------------
     enable_workers: bool = Field(default=False, alias="ENABLE_WORKERS")
