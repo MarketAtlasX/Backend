@@ -56,6 +56,28 @@ class EventBroadcaster:
             "timestamp": datetime.utcnow().isoformat(),
         })
 
+    async def broadcast_live_event(self, event_data: dict, msg_type: str = "live_event_new") -> None:
+        await self.broadcast("live_events", {
+            "type": msg_type,
+            "data": event_data,
+            "timestamp": datetime.utcnow().isoformat(),
+        })
+
+    async def broadcast_impact(self, impact_data: dict, event_id: str) -> None:
+        await self.broadcast("impacts", {
+            "type": "impact_new",
+            "data": impact_data,
+            "event_id": event_id,
+            "timestamp": datetime.utcnow().isoformat(),
+        })
+
+    async def broadcast_alert(self, alert_data: dict) -> None:
+        await self.broadcast("alerts", {
+            "type": "alert",
+            "data": alert_data,
+            "timestamp": datetime.utcnow().isoformat(),
+        })
+
     @property
     def subscriber_count(self) -> int:
         return sum(len(qs) for qs in self._subscriptions.values())

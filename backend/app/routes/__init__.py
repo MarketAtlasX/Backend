@@ -8,6 +8,7 @@ from app.routes.entity import router as entity_router
 from app.routes.event import router as event_router
 from app.routes.globe_routes import router as globe_router
 from app.routes.kg_routes import router as kg_router
+from app.routes.live_events import router as live_event_router
 from app.routes.market_price import router as market_price_router
 from app.routes.signal import router as signal_router
 from app.routes.world_state import router as world_state_router
@@ -31,4 +32,5 @@ __all__ = [
     "graph_engine_router",
     "ws_router",
     "backtest_router",
+    "live_event_router",
 ]

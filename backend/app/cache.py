@@ -121,5 +121,4 @@ class CacheClient:
             logger.warning("Cache CLEAR failed for pattern=%s: %s", pattern, e)
             return 0
 
-
 cache = CacheClient()

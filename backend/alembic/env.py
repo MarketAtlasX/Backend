@@ -17,6 +17,12 @@ from app.database import Base
 from app.models.event import Event  # noqa: F401
 from app.models.entity import Entity  # noqa: F401
 from app.models.event_entity import EventEntity  # noqa: F401
+from app.models.live_event import LiveEvent  # noqa: F401
+from app.models.live_event import EventImpact  # noqa: F401
+from app.models.live_event import EventAffectedAsset  # noqa: F401
+from app.models.live_event import EventNewsArticle  # noqa: F401
+from app.models.live_event import EventAlert  # noqa: F401
+from app.models.live_event import UserEventFilter  # noqa: F401
 from app.models.market_price import MarketPrice  # noqa: F401
 from app.models.signal import Signal  # noqa: F401
 from app.models.country import Country  # noqa: F401

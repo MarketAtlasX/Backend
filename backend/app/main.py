@@ -26,6 +26,7 @@ from app.routes import (
     globe_router,
     graph_engine_router,
     kg_router,
+    live_event_router,
     market_price_router,
     memory_router,
     signal_router,
@@ -147,6 +148,7 @@ api_v1_router.include_router(globe_router)       # /relations/trade, /relations/
 api_v1_router.include_router(world_state_router)
 api_v1_router.include_router(memory_router)
 api_v1_router.include_router(graph_engine_router)
+api_v1_router.include_router(live_event_router)
 api_v1_router.include_router(backtest_router)
 app.include_router(api_v1_router)
 
