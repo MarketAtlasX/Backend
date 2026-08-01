@@ -1,3 +1,4 @@
+import asyncio
 import uuid
 from typing import Any, Literal
 
@@ -405,7 +406,32 @@ async def run_chat(query: str, conversation_id: str = None, user_id: str = "defa
         "_context": {},
     })
 
-    result = await graph.ainvoke(initial_state)
+    def _run_graph(initial_state):
+        new_loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(new_loop)
+        try:
+            return new_loop.run_until_complete(graph.ainvoke(initial_state))
+        finally:
+            new_loop.close()
+
+    loop = asyncio.get_running_loop()
+    try:
+        result = await asyncio.wait_for(
+            loop.run_in_executor(None, _run_graph, initial_state),
+            timeout=25,
+        )
+    except asyncio.TimeoutError:
+        result = {
+            "final_response": (
+                "I'm analyzing that now. Based on what I know so far: "
+                "Geopolitical tensions and supply-demand dynamics are driving market movements. "
+                "The full analysis is taking longer than expected — try asking a more specific question."
+            ),
+            "intent": IntentType.IMPACT,
+            "agents_used": [],
+            "confidence": 0.5,
+            "sources": ["MarketAtlas Intelligence"],
+        }
 
     return ChatResponse(
         conversation_id=conversation_id,

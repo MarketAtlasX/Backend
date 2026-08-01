@@ -17,7 +17,7 @@ def get_driver():
         return None
     try:
         from neo4j import GraphDatabase
-        return GraphDatabase.driver(uri, auth=(user, password))
+        return GraphDatabase.driver(uri, auth=(user, password), connection_timeout=3)
     except Exception:
         return None
 
@@ -25,10 +25,21 @@ def get_driver():
 class Neo4jClient:
     def __init__(self):
         self.driver = get_driver()
+        self._available = None
 
     @property
     def available(self) -> bool:
-        return self.driver is not None
+        if self._available is not None:
+            return self._available
+        if not self.driver:
+            self._available = False
+            return False
+        try:
+            self.driver.verify_connectivity()
+            self._available = True
+        except Exception:
+            self._available = False
+        return self._available
 
     def close(self):
         if self.driver:

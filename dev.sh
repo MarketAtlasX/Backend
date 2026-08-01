@@ -169,6 +169,24 @@ else
   echo "[graph-engine] Not found, skipping."
 fi
 
+# ── 6d. Simulator (optional) ────────────────────────────────────────
+SIM_DIR=""
+for d in "$ROOT/../simulator" "$HOME/simulator"; do
+  [ -d "$d" ] && SIM_DIR="$d" && break
+done
+if [ -n "$SIM_DIR" ]; then
+  echo "[simulator] Starting on :8007..."
+  SIM_PY="$ROOT/venv/bin/uvicorn"
+  if [ -f "$SIM_PY" ]; then
+    (cd "$SIM_DIR" && PYTHONPATH="$(dirname "$SIM_DIR")" "$SIM_PY" simulator.main:app --reload --port 8007) &
+  else
+    (cd "$SIM_DIR" && PYTHONPATH="$(dirname "$SIM_DIR")" uvicorn simulator.main:app --reload --port 8007) &
+  fi
+  PIDS+=($!)
+else
+  echo "[simulator] Not found, skipping."
+fi
+
 # ── 6. KG Agent (optional) ──────────────────────────────────────────
 KG_DIR=""
 for d in "$ROOT/../knowledge-graph-agent" "$HOME/knowledge-graph-agent"; do
@@ -196,6 +214,7 @@ echo "  Market:    http://localhost:8004  (if found)"
 echo "  World St:  http://localhost:8006  (if found)"
 echo "  Memory:    http://localhost:8010  (if found)"
 echo "  Graph:     http://localhost:8005  (if found)"
+echo "  Simulator: http://localhost:8007  (if found)"
 echo "  KG Agent:  http://localhost:8005  (if found, conflicts with Graph)"
 echo "═══════════════════════════════════════════════════════"
 echo "  Press Ctrl+C to stop everything."
