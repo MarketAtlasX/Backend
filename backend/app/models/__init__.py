@@ -5,12 +5,17 @@ from app.models.entity_relationship import EntityRelationship
 from app.models.event import Event
 from app.models.event_entity import EventEntity
 from app.models.live_event import (
-    EventAffectedAsset, EventAlert, EventImpact, EventNewsArticle,
-    LiveEvent, UserEventFilter,
+    EventAffectedAsset,
+    EventAlert,
+    EventImpact,
+    EventNewsArticle,
+    LiveEvent,
+    UserEventFilter,
 )
 from app.models.market_price import MarketPrice
 from app.models.military_relation import MilitaryRelation
 from app.models.port import Port
+from app.models.portfolio import Portfolio, SectorCache, SimulationRun
 from app.models.raw_event import RawEvent
 from app.models.signal import Signal
 from app.models.trade_route import TradeRoute
@@ -21,4 +26,5 @@ __all__ = [
     "RawEvent", "EntityRelationship",
     "LiveEvent", "EventImpact", "EventAffectedAsset",
     "EventNewsArticle", "EventAlert", "UserEventFilter",
+    "Portfolio", "SimulationRun", "SectorCache",
 ]
