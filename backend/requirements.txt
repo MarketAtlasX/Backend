@@ -82,4 +82,4 @@ textblob>=0.17.0
 nest-asyncio>=1.6.0
 yfinance==1.4.1
 python-jose[cryptography]>=3.3.0
-passlib[bcrypt]>=1.7.4
+bcrypt>=4.1
