@@ -9,7 +9,7 @@ from sqlalchemy import text
 from app.cache import cache
 from app.chatbot.api.routes import chat_router
 from app.chatbot.api.websocket import handle_websocket as chat_ws_handler
-from app.chatbot.llm.provider import get_llm, MockLLM
+from app.chatbot.llm.provider import MockLLM, get_llm
 from app.chatbot.pipeline_adapter import run_daily_pipeline
 from app.config import settings
 from app.database import AsyncSessionLocal, close_db
@@ -27,9 +27,13 @@ from app.routes import (
     graph_engine_router,
     kg_router,
     live_event_router,
+    market_data_router,
     market_price_router,
     memory_router,
+    portfolio_router,
     signal_router,
+    simulation_ws_router,
+    simulations_router,
     world_state_router,
     ws_router,
 )
@@ -150,6 +154,9 @@ api_v1_router.include_router(memory_router)
 api_v1_router.include_router(graph_engine_router)
 api_v1_router.include_router(live_event_router)
 api_v1_router.include_router(backtest_router)
+api_v1_router.include_router(portfolio_router)
+api_v1_router.include_router(simulations_router)
+api_v1_router.include_router(market_data_router)
 app.include_router(api_v1_router)
 
 # Chat router already has /api/v1/chat prefix — include at root
@@ -157,6 +164,7 @@ app.include_router(chat_router)
 
 # WebSocket stays at root
 app.include_router(ws_router)
+app.include_router(simulation_ws_router)
 
 
 @app.websocket("/ws/chat")
@@ -190,6 +198,6 @@ async def health_check() -> dict:
             "database": "ok" if db_ok else "down",
             "redis": "ok" if redis_ok else "unavailable",
             "workers": "enabled" if settings.enable_workers else "disabled",
-            "llm": f"⚠ MOCK — no real LLM configured" if is_mock else f"ok ({llm_provider})",
+            "llm": "⚠ MOCK — no real LLM configured" if is_mock else f"ok ({llm_provider})",
         },
     }

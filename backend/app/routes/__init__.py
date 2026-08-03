@@ -7,20 +7,27 @@ from app.routes.dashboard import router as dashboard_router
 from app.routes.entity import router as entity_router
 from app.routes.event import router as event_router
 from app.routes.globe_routes import router as globe_router
+from app.routes.graph_engine import router as graph_engine_router
 from app.routes.kg_routes import router as kg_router
 from app.routes.live_events import router as live_event_router
+from app.routes.market_data import router as market_data_router
 from app.routes.market_price import router as market_price_router
-from app.routes.signal import router as signal_router
-from app.routes.world_state import router as world_state_router
 from app.routes.memory import router as memory_router
-from app.routes.graph_engine import router as graph_engine_router
+from app.routes.portfolio import router as portfolio_router
+from app.routes.signal import router as signal_router
+from app.routes.simulation_ws import ws_router as simulation_ws_router
+from app.routes.simulations import router as simulations_router
+from app.routes.world_state import router as world_state_router
 from app.routes.ws import ws_router
 
 __all__ = [
     "event_router",
     "entity_router",
     "market_price_router",
+    "portfolio_router",
     "signal_router",
+    "simulations_router",
+    "market_data_router",
     "analysis_router",
     "kg_router",
     "analyze_router",
@@ -31,6 +38,7 @@ __all__ = [
     "memory_router",
     "graph_engine_router",
     "ws_router",
+    "simulation_ws_router",
     "backtest_router",
     "live_event_router",
 ]
