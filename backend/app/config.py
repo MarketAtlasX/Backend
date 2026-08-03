@@ -136,6 +136,46 @@ class Settings(BaseSettings):
     )
 
     # -------------------------------------------------------------------------
+    # Simulator Service (external microservice from separate repo)
+    # Runs as ``uvicorn simulator.main:app --port 8007`` in ../simulator/
+    # -------------------------------------------------------------------------
+    simulator_url: str = Field(
+        default="http://localhost:8007",
+        alias="SIMULATOR_URL",
+        description="Base URL of the Scenario Simulator service",
+    )
+
+    # -------------------------------------------------------------------------
+    # Sector Market Data Feed
+    # Predefined sector -> ticker map used to compute per-sector return and
+    # volatility. If the feed is unavailable, the simulator falls back to its
+    # own static sector betas.
+    # -------------------------------------------------------------------------
+    sector_tickers: str = Field(
+        default=(
+            "technology:AAPL,MSFT,NVDA;"
+            "semiconductors:AMD,INTC,AVGO;"
+            "energy:XOM,CVX,COP;"
+            "defense:LMT,RTX,NOC;"
+            "financials:JPM,BAC,GS;"
+            "healthcare:JNJ,UNH,LLY;"
+            "consumer_cyclical:AMZN,TSLA,HD;"
+            "consumer_defensive:PG,KO,WMT;"
+            "utilities:NEE,DUK,SO;"
+            "materials:LIN,SHW,FCX;"
+            "commodities:GLD,SLV,USO"
+        ),
+        alias="SECTOR_TICKERS",
+        description="Semicolon-separated 'sector:ticker1,ticker2' pairs",
+    )
+    sector_cache_ttl_seconds: int = Field(
+        default=1800,
+        alias="SECTOR_CACHE_TTL_SECONDS",
+        ge=60,
+        description="TTL for cached sector metrics (seconds)",
+    )
+
+    # -------------------------------------------------------------------------
     # CORS
     # -------------------------------------------------------------------------
     cors_origins: str = Field(
