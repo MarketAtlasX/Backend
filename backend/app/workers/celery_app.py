@@ -25,6 +25,7 @@ celery_app = Celery(
         "app.workers.analysis_tasks",
         "app.workers.market_data_tasks",
         "app.workers.geo_event_tasks",
+        "app.workers.simulation_tasks",
     ],
 )
 
