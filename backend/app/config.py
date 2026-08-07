@@ -52,10 +52,10 @@ class Settings(BaseSettings):
 
     # -------------------------------------------------------------------------
     # Knowledge Graph Agent Service (external microservice)
-    # Runs as ``uvicorn service:app --port 8005`` in ../knowledge-graph-agent/
+    # Runs as ``uvicorn service:app --port 8008`` in ../knowledge-graph-agent/
     # -------------------------------------------------------------------------
     kg_agent_url: str = Field(
-        default="http://localhost:8005",
+        default="http://localhost:8008",
         alias="KG_AGENT_URL",
         description="Base URL of the knowledge-graph-agent service",
     )
@@ -98,6 +98,8 @@ class Settings(BaseSettings):
     gemini_api_key: str = Field(default="", alias="GEMINI_API_KEY")
     openai_api_key: str = Field(default="", alias="OPENAI_API_KEY")
     claude_api_key: str = Field(default="", alias="CLAUDE_API_KEY")
+    perplexity_api_key: str = Field(default="", alias="PERPLEXITY_API_KEY")
+    perplexity_model: str = Field(default="sonar-pro", alias="PERPLEXITY_MODEL")
 
     # -------------------------------------------------------------------------
     # Financial Data API
