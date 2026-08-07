@@ -39,6 +39,7 @@ from app.routes import (
 )
 from app.routes.auth import router as auth_router
 from app.services.event_broadcaster import EventBroadcaster
+from app.services.gdelt_stream_service import GDELTStreamService
 from app.services.market_stream_service import MarketStreamService
 
 logger = logging.getLogger(__name__)
@@ -74,6 +75,15 @@ async def lifespan(app: FastAPI):
             logger.warning("Market stream failed to start (non-fatal): %s", exc)
 
     stream_tasks.append(asyncio.create_task(_run_market_stream(), name="market-stream"))
+
+    async def _run_gdelt_stream():
+        try:
+            gdelt_stream = GDELTStreamService(broadcaster)
+            await gdelt_stream.run()
+        except Exception as exc:
+            logger.warning("GDELT stream failed to start (non-fatal): %s", exc)
+
+    stream_tasks.append(asyncio.create_task(_run_gdelt_stream(), name="gdelt-stream"))
 
     llm = get_llm()
     llm_provider = type(llm).__name__

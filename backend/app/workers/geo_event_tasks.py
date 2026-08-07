@@ -106,26 +106,31 @@ def fetch_geo_events_for_country(self, country_name: str, entity_id: int) -> dic
 
 @celery_app.task(bind=True, max_retries=1, default_retry_delay=300)
 def fetch_all_geo_events(self) -> dict:
-    """Fetch news for ALL entities with tickers and major countries.
+    """Fetch live geopolitical events via a single rate-limited GDELT batch.
 
-    Dispatches individual tasks per entity so they run in parallel across
-    the Celery worker pool.
+    Previously this dispatched one /analyze call per entity (~30 parallel
+    requests), which exceeded GDELT's ~1 request/5s rate limit and caused
+    mass 429s — the events pipeline kept failing. It now runs one paced
+    GDELT batch through GDELTStreamService, which handles dedup and rate
+    limiting internally.
 
     Usage:
         from app.workers.geo_event_tasks import fetch_all_geo_events
         fetch_all_geo_events.delay()
     """
-    results = {"ticker_entities": 0, "country_entities": 0, "tasks_dispatched": 0}
+    try:
+        return _run_async(_run_gdelt_batch())
+    except Exception as e:
+        logger.exception("Geo event batch failed")
+        return {"status": "failed", "error": str(e)}
 
-    for entity_id, ticker in TICKER_ENTITIES:
-        fetch_geo_events_for_entity.delay(entity_id=entity_id, ticker=ticker)
-        results["tasks_dispatched"] += 1
-        results["ticker_entities"] += 1
 
-    for country_name, entity_id in COUNTRIES_WITHOUT_TICKERS:
-        fetch_geo_events_for_country.delay(country_name=country_name, entity_id=entity_id)
-        results["tasks_dispatched"] += 1
-        results["country_entities"] += 1
+async def _run_gdelt_batch() -> dict:
+    from app.services.event_broadcaster import EventBroadcaster
+    from app.services.gdelt_stream_service import GDELTStreamService
 
-    results["status"] = "dispatched"
-    return results
+    broadcaster = EventBroadcaster()
+    service = GDELTStreamService(broadcaster)
+    await service._load_existing_urls()
+    created = await service.poll_once()
+    return {"new_events": created, "status": "completed"}

@@ -51,18 +51,14 @@ def ingest_gdelt_batch() -> dict:
     try:
         import asyncio
 
+        from app.services.event_broadcaster import EventBroadcaster
         from app.services.gdelt_stream_service import GDELTStreamService
 
         async def _run():
-            from app.database import AsyncSessionLocal
-
-            async with AsyncSessionLocal() as session:
-                from app.services.event_broadcaster import EventBroadcaster
-
-                broadcaster = EventBroadcaster()
-                service = GDELTStreamService(session, broadcaster)
-                events = await service.poll_once()
-                return len(events)
+            broadcaster = EventBroadcaster()
+            service = GDELTStreamService(broadcaster)
+            await service._load_existing_urls()
+            return await service.poll_once()
 
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)

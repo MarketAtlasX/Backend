@@ -25,6 +25,7 @@ celery_app = Celery(
         "app.workers.analysis_tasks",
         "app.workers.market_data_tasks",
         "app.workers.geo_event_tasks",
+        "app.workers.live_event_tasks",
         "app.workers.simulation_tasks",
     ],
 )
@@ -43,6 +44,16 @@ celery_app.conf.beat_schedule = {
     "fetch-geo-events": {
         "task": "app.workers.geo_event_tasks.fetch_all_geo_events",
         "schedule": crontab(minute="*/15"),
+        "kwargs": {},
+    },
+    "ingest-gdelt-batch": {
+        "task": "app.workers.live_event_tasks.ingest_gdelt_batch",
+        "schedule": crontab(minute="*/15"),
+        "kwargs": {},
+    },
+    "resolve-stale-events": {
+        "task": "app.workers.live_event_tasks.resolve_stale_events",
+        "schedule": crontab(minute=30),
         "kwargs": {},
     },
 }
