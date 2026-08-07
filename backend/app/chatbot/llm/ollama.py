@@ -27,7 +27,7 @@ class OllamaLLM(LLMInterface):
             self._available = False
             return False
 
-    def generate(self, prompt: str, system_prompt: Optional[str] = None, temperature: float = 0.3) -> str:
+    def generate(self, prompt: str, system_prompt: Optional[str] = None, temperature: float = 0.3, history: Optional[list[dict]] = None) -> str:
         if not self._check_available():
             raise ConnectionError("Ollama not available")
         payload = {"model": self.model, "prompt": prompt, "stream": False, "options": {"temperature": temperature}}
@@ -38,7 +38,7 @@ class OllamaLLM(LLMInterface):
             resp.raise_for_status()
             return resp.json().get("response", "")
 
-    def generate_stream(self, prompt: str, system_prompt: Optional[str] = None, temperature: float = 0.3) -> Generator[str, None, None]:
+    def generate_stream(self, prompt: str, system_prompt: Optional[str] = None, temperature: float = 0.3, history: Optional[list[dict]] = None) -> Generator[str, None, None]:
         if not self._check_available():
             raise ConnectionError("Ollama not available")
         payload = {"model": self.model, "prompt": prompt, "stream": True, "options": {"temperature": temperature}}

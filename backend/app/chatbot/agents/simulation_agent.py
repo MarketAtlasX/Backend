@@ -34,7 +34,7 @@ Run a structured simulation. Return your analysis as a JSON object with these fi
 
 Simulation JSON:"""
 
-        response = self.llm.generate(prompt, system_prompt=system_prompt, temperature=0.3)
+        response = self.llm.generate(prompt, system_prompt=system_prompt, temperature=0.3, history=(context or {}).get('conversation_history'))
 
         try:
             result = json.loads(response.strip().strip("```json").strip("```").strip())

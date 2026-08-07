@@ -9,6 +9,7 @@ import httpx
 from .base import LLMInterface
 from .ollama import OllamaLLM
 from .provider_gemini import HybridLLM
+from .provider_perplexity import PerplexityLLM
 
 logger = logging.getLogger(__name__)
 
@@ -38,47 +39,52 @@ def _load_keys():
 class MarketAtlasLLM(LLMInterface):
     """LLM provider that tries OpenAI, then Claude, then Ollama, then Mock fallback."""
 
-    def generate(self, prompt: str, system_prompt: Optional[str] = None, temperature: float = 0.3) -> str:
+    def generate(self, prompt: str, system_prompt: Optional[str] = None, temperature: float = 0.3, history: Optional[list[dict]] = None) -> str:
         _load_keys()
         if OPENAI_API_KEY:
             try:
-                return self._call_openai(prompt, system_prompt, temperature)
+                return self._call_openai(prompt, system_prompt, temperature, history)
             except Exception as e:
                 logger.warning(f"OpenAI failed, trying Claude: {e}")
         if CLAUDE_API_KEY:
             try:
-                return self._call_claude(prompt, system_prompt, temperature)
+                return self._call_claude(prompt, system_prompt, temperature, history)
             except Exception as e:
                 logger.warning(f"Claude failed, trying Ollama: {e}")
         try:
-            return OllamaLLM().generate(prompt, system_prompt, temperature)
+            return OllamaLLM().generate(prompt, system_prompt, temperature, history)
         except Exception as e:
             logger.warning(f"Ollama failed, using MockLLM: {e}")
-            return MockLLM().generate(prompt, system_prompt, temperature)
+            return MockLLM().generate(prompt, system_prompt, temperature, history)
 
-    def generate_stream(self, prompt: str, system_prompt: Optional[str] = None, temperature: float = 0.3) -> Generator[str, None, None]:
+    def generate_stream(self, prompt: str, system_prompt: Optional[str] = None, temperature: float = 0.3, history: Optional[list[dict]] = None) -> Generator[str, None, None]:
         _load_keys()
         if OPENAI_API_KEY:
             try:
-                yield from self._stream_openai(prompt, system_prompt, temperature)
+                yield from self._stream_openai(prompt, system_prompt, temperature, history)
                 return
             except Exception:
                 pass
         if CLAUDE_API_KEY:
             try:
-                yield from self._stream_claude(prompt, system_prompt, temperature)
+                yield from self._stream_claude(prompt, system_prompt, temperature, history)
                 return
             except Exception:
                 pass
         try:
-            yield from OllamaLLM().generate_stream(prompt, system_prompt, temperature)
+            yield from OllamaLLM().generate_stream(prompt, system_prompt, temperature, history)
         except Exception:
-            yield from MockLLM().generate_stream(prompt, system_prompt, temperature)
+            yield from MockLLM().generate_stream(prompt, system_prompt, temperature, history)
 
-    def _call_openai(self, prompt: str, system_prompt: Optional[str] = None, temperature: float = 0.3) -> str:
+    def _call_openai(self, prompt: str, system_prompt: Optional[str] = None, temperature: float = 0.3, history: Optional[list[dict]] = None) -> str:
         messages = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
+        messages.extend(
+            {"role": turn["role"], "content": turn["content"]}
+            for turn in (history or [])
+            if turn.get("role") in ("system", "user", "assistant") and turn.get("content")
+        )
         messages.append({"role": "user", "content": prompt})
         resp = httpx.post(
             "https://api.openai.com/v1/chat/completions",
@@ -89,8 +95,13 @@ class MarketAtlasLLM(LLMInterface):
         resp.raise_for_status()
         return resp.json()["choices"][0]["message"]["content"]
 
-    def _call_claude(self, prompt: str, system_prompt: Optional[str] = None, temperature: float = 0.3) -> str:
-        messages = [{"role": "user", "content": prompt}]
+    def _call_claude(self, prompt: str, system_prompt: Optional[str] = None, temperature: float = 0.3, history: Optional[list[dict]] = None) -> str:
+        messages = [
+            {"role": turn["role"], "content": turn["content"]}
+            for turn in (history or [])
+            if turn.get("role") in ("user", "assistant") and turn.get("content")
+        ]
+        messages.append({"role": "user", "content": prompt})
         payload = {
             "model": "claude-3-haiku-20240307",
             "max_tokens": 2000,
@@ -108,10 +119,15 @@ class MarketAtlasLLM(LLMInterface):
         resp.raise_for_status()
         return resp.json()["content"][0]["text"]
 
-    def _stream_openai(self, prompt: str, system_prompt: Optional[str] = None, temperature: float = 0.3) -> Generator[str, None, None]:
+    def _stream_openai(self, prompt: str, system_prompt: Optional[str] = None, temperature: float = 0.3, history: Optional[list[dict]] = None) -> Generator[str, None, None]:
         messages = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
+        messages.extend(
+            {"role": turn["role"], "content": turn["content"]}
+            for turn in (history or [])
+            if turn.get("role") in ("system", "user", "assistant") and turn.get("content")
+        )
         messages.append({"role": "user", "content": prompt})
         with httpx.Client(timeout=60) as client:
             with client.stream(
@@ -126,8 +142,13 @@ class MarketAtlasLLM(LLMInterface):
                         if delta:
                             yield delta
 
-    def _stream_claude(self, prompt: str, system_prompt: Optional[str] = None, temperature: float = 0.3) -> Generator[str, None, None]:
-        messages = [{"role": "user", "content": prompt}]
+    def _stream_claude(self, prompt: str, system_prompt: Optional[str] = None, temperature: float = 0.3, history: Optional[list[dict]] = None) -> Generator[str, None, None]:
+        messages = [
+            {"role": turn["role"], "content": turn["content"]}
+            for turn in (history or [])
+            if turn.get("role") in ("user", "assistant") and turn.get("content")
+        ]
+        messages.append({"role": "user", "content": prompt})
         payload = {
             "model": "claude-3-haiku-20240307",
             "max_tokens": 2000,
@@ -168,7 +189,7 @@ FOLLOWUP_PRONOUNS = re.compile(
 
 
 class MockLLM(LLMInterface):
-    def generate(self, prompt: str, system_prompt: Optional[str] = None, temperature: float = 0.3) -> str:
+    def generate(self, prompt: str, system_prompt: Optional[str] = None, temperature: float = 0.3, history: Optional[list[dict]] = None) -> str:
         query = prompt.split("Query: ")[-1].split("\n")[0].strip() if "Query: " in prompt else prompt[:100]
 
         if "Extract" in prompt or "JSON" in prompt:
@@ -265,13 +286,20 @@ class MockLLM(LLMInterface):
 
         return f"Analysis complete for: {query[:100]}... Assessment based on available intelligence indicates moderate geopolitical risk with potential market implications across affected sectors."
 
-    def generate_stream(self, prompt: str, system_prompt: Optional[str] = None, temperature: float = 0.3) -> Generator[str, None, None]:
-        result = self.generate(prompt, system_prompt, temperature)
+    def generate_stream(self, prompt: str, system_prompt: Optional[str] = None, temperature: float = 0.3, history: Optional[list[dict]] = None) -> Generator[str, None, None]:
+        result = self.generate(prompt, system_prompt, temperature, history)
         for chunk in result.split(". "):
             yield chunk + ". "
 
 
 def get_llm() -> LLMInterface:
+    # Perplexity first — Sonar models do live web search and return citations.
+    try:
+        perplexity = PerplexityLLM()
+        if perplexity.available():
+            return perplexity
+    except Exception:
+        pass
     try:
         hybrid = HybridLLM()
         if hybrid._try_gemini():

@@ -54,7 +54,7 @@ Provide recommendation including:
 
 Recommendation:"""
 
-        response = self.llm.generate(prompt, system_prompt=system_prompt)
+        response = self.llm.generate(prompt, system_prompt=system_prompt, history=(context or {}).get('conversation_history'))
 
         return {
             "agent": "RecommendationAgent",

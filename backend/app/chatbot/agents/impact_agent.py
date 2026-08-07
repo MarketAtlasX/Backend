@@ -72,7 +72,7 @@ Analyze the geopolitical impact. Include:
 
 Provide structured analysis:"""
 
-        response = self.llm.generate(prompt, system_prompt=system_prompt)
+        response = self.llm.generate(prompt, system_prompt=system_prompt, history=(context or {}).get('conversation_history'))
 
         entities = self._extract_entities(query)
         graph_context = ""

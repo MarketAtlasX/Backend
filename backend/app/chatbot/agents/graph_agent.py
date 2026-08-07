@@ -68,7 +68,7 @@ Relevant Knowledge:
 
 Explain the relationships and connections relevant to this query:"""
 
-        response = self.llm.generate(prompt, system_prompt=system_prompt)
+        response = self.llm.generate(prompt, system_prompt=system_prompt, history=(context or {}).get('conversation_history'))
 
         return {
             "agent": "GraphAgent",

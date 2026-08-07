@@ -38,6 +38,7 @@ Provide your {role} perspective in 2-3 sentences:"""
                 prompt,
                 system_prompt=f"You are a {role} at MarketAtlas. Be analytical and data-driven.",
                 temperature=0.3,
+                history=(context or {}).get('conversation_history'),
             )
             perspectives.append({"role": role, "analysis": response})
 
@@ -54,6 +55,7 @@ into a final, coherent answer addressing the user's query.
             synthesis_prompt,
             system_prompt="You are a Lead Intelligence Officer. Synthesize analysis into clear, actionable intelligence.",
             temperature=0.3,
+            history=(context or {}).get('conversation_history'),
         )
 
         return {

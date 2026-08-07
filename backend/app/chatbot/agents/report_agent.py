@@ -63,7 +63,7 @@ Generate a structured intelligence report covering:
 
 Intelligence Report:"""
 
-        response = self.llm.generate(prompt, system_prompt=system_prompt)
+        response = self.llm.generate(prompt, system_prompt=system_prompt, history=(context or {}).get('conversation_history'))
 
         return {
             "agent": "ReportAgent",

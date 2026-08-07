@@ -37,13 +37,19 @@ class GeminiLLM(LLMInterface):
         _load_gemini_key()
         return bool(GEMINI_API_KEY)
 
-    def generate(self, prompt: str, system_prompt: Optional[str] = None, temperature: float = 0.3) -> str:
+    def generate(self, prompt: str, system_prompt: Optional[str] = None, temperature: float = 0.3, history: Optional[list[dict]] = None) -> str:
         _load_gemini_key()
         if not GEMINI_API_KEY:
             raise ConnectionError("Gemini API key not configured")
         url = f"{GEMINI_BASE}/models/{self.model}:generateContent?key={GEMINI_API_KEY}"
+        contents = [
+            {"role": "user" if turn["role"] == "assistant" else turn["role"], "parts": [{"text": turn["content"]}]}
+            for turn in (history or [])
+            if turn.get("role") in ("user", "assistant") and turn.get("content")
+        ]
+        contents.append({"role": "user", "parts": [{"text": prompt}]})
         payload = {
-            "contents": [{"parts": [{"text": prompt}]}],
+            "contents": contents,
             "generationConfig": {
                 "temperature": temperature,
                 "maxOutputTokens": 2000,
@@ -66,13 +72,19 @@ class GeminiLLM(LLMInterface):
             logger.warning("Gemini API call failed: %s", e)
             raise
 
-    def generate_stream(self, prompt: str, system_prompt: Optional[str] = None, temperature: float = 0.3) -> Generator[str, None, None]:
+    def generate_stream(self, prompt: str, system_prompt: Optional[str] = None, temperature: float = 0.3, history: Optional[list[dict]] = None) -> Generator[str, None, None]:
         _load_gemini_key()
         if not GEMINI_API_KEY:
             raise ConnectionError("Gemini API key not configured")
         url = f"{GEMINI_BASE}/models/{self.model}:streamGenerateContent?key={GEMINI_API_KEY}"
+        contents = [
+            {"role": "user" if turn["role"] == "assistant" else turn["role"], "parts": [{"text": turn["content"]}]}
+            for turn in (history or [])
+            if turn.get("role") in ("user", "assistant") and turn.get("content")
+        ]
+        contents.append({"role": "user", "parts": [{"text": prompt}]})
         payload = {
-            "contents": [{"parts": [{"text": prompt}]}],
+            "contents": contents,
             "generationConfig": {
                 "temperature": temperature,
                 "maxOutputTokens": 2000,
@@ -110,7 +122,7 @@ FOLLOWUP_PRONOUNS = re.compile(
 
 
 class MockLLM(LLMInterface):
-    def generate(self, prompt: str, system_prompt: Optional[str] = None, temperature: float = 0.3) -> str:
+    def generate(self, prompt: str, system_prompt: Optional[str] = None, temperature: float = 0.3, history: Optional[list[dict]] = None) -> str:
         query = prompt.split("Query: ")[-1].split("\n")[0].strip() if "Query: " in prompt else prompt[:100]
         if "Extract" in prompt or "JSON" in prompt:
             if "geopolitical entities" in prompt or "named entities" in prompt:
@@ -169,8 +181,8 @@ class MockLLM(LLMInterface):
             })
         return f"Analysis complete for: {query[:100]}... Assessment based on available intelligence indicates moderate geopolitical risk with potential market implications."
 
-    def generate_stream(self, prompt: str, system_prompt: Optional[str] = None, temperature: float = 0.3) -> Generator[str, None, None]:
-        result = self.generate(prompt, system_prompt, temperature)
+    def generate_stream(self, prompt: str, system_prompt: Optional[str] = None, temperature: float = 0.3, history: Optional[list[dict]] = None) -> Generator[str, None, None]:
+        result = self.generate(prompt, system_prompt, temperature, history)
         for chunk in result.split(". "):
             yield chunk + ". "
 
@@ -185,29 +197,29 @@ class HybridLLM(LLMInterface):
         _load_gemini_key()
         return bool(GEMINI_API_KEY)
 
-    def generate(self, prompt: str, system_prompt: Optional[str] = None, temperature: float = 0.3) -> str:
+    def generate(self, prompt: str, system_prompt: Optional[str] = None, temperature: float = 0.3, history: Optional[list[dict]] = None) -> str:
         if self._try_gemini():
             try:
-                return GeminiLLM().generate(prompt, system_prompt, temperature)
+                return GeminiLLM().generate(prompt, system_prompt, temperature, history)
             except Exception as e:
                 logger.warning("Gemini failed, falling back to Ollama: %s", e)
         try:
-            return OllamaLLM().generate(prompt, system_prompt, temperature)
+            return OllamaLLM().generate(prompt, system_prompt, temperature, history)
         except Exception as e:
             logger.warning("Ollama failed, using MockLLM: %s", e)
-            return MockLLM().generate(prompt, system_prompt, temperature)
+            return MockLLM().generate(prompt, system_prompt, temperature, history)
 
-    def generate_stream(self, prompt: str, system_prompt: Optional[str] = None, temperature: float = 0.3) -> Generator[str, None, None]:
+    def generate_stream(self, prompt: str, system_prompt: Optional[str] = None, temperature: float = 0.3, history: Optional[list[dict]] = None) -> Generator[str, None, None]:
         if self._try_gemini():
             try:
-                yield from GeminiLLM().generate_stream(prompt, system_prompt, temperature)
+                yield from GeminiLLM().generate_stream(prompt, system_prompt, temperature, history)
                 return
             except Exception:
                 pass
         try:
-            yield from OllamaLLM().generate_stream(prompt, system_prompt, temperature)
+            yield from OllamaLLM().generate_stream(prompt, system_prompt, temperature, history)
         except Exception:
-            yield from MockLLM().generate_stream(prompt, system_prompt, temperature)
+            yield from MockLLM().generate_stream(prompt, system_prompt, temperature, history)
 
 
 def get_llm() -> LLMInterface:

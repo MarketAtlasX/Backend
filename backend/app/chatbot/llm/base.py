@@ -4,9 +4,21 @@ from typing import Optional
 
 class LLMInterface(ABC):
     @abstractmethod
-    def generate(self, prompt: str, system_prompt: Optional[str] = None, temperature: float = 0.3) -> str:
+    def generate(
+        self,
+        prompt: str,
+        system_prompt: Optional[str] = None,
+        temperature: float = 0.3,
+        history: Optional[list[dict]] = None,
+    ) -> str:
         ...
 
     @abstractmethod
-    def generate_stream(self, prompt: str, system_prompt: Optional[str] = None, temperature: float = 0.3):
+    def generate_stream(
+        self,
+        prompt: str,
+        system_prompt: Optional[str] = None,
+        temperature: float = 0.3,
+        history: Optional[list[dict]] = None,
+    ):
         ...
