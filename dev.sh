@@ -68,6 +68,18 @@ else
 fi
 PIDS+=($!)
 
+# ── 2b. Celery worker + beat (live events / market data) ────────────
+echo "[celery] Starting worker + beat..."
+CELERY_PY="$ROOT/venv/bin/celery"
+if [ -f "$CELERY_PY" ]; then
+  (cd "$ROOT/backend" && PYTHONPATH="$ROOT/backend:$ROOT/.." "$CELERY_PY" -A app.workers.celery_app worker --loglevel=info) &
+  PIDS+=($!)
+  (cd "$ROOT/backend" && PYTHONPATH="$ROOT/backend:$ROOT/.." "$CELERY_PY" -A app.workers.celery_app beat --loglevel=info) &
+  PIDS+=($!)
+else
+  echo "[celery] celery binary not found, skipping. (pip install -r backend/requirements.txt)"
+fi
+
 # ── 3. Frontend (Vite) ──────────────────────────────────────────────
 FRONTEND_DIR=""
 for d in "$ROOT/frontend" "$HOME/frontend"; do
@@ -193,12 +205,12 @@ for d in "$ROOT/../knowledge-graph-agent" "$HOME/knowledge-graph-agent"; do
   [ -d "$d" ] && KG_DIR="$d" && break
 done
 if [ -n "$KG_DIR" ]; then
-  echo "[kg-agent] Starting on :8005..."
+  echo "[kg-agent] Starting on :8008..."
   KG_PY="$KG_DIR/venv/bin/uvicorn"
   if [ -f "$KG_PY" ]; then
-    (cd "$KG_DIR" && "$KG_PY" service:app --reload --port 8005) &
+    (cd "$KG_DIR" && "$KG_PY" service:app --reload --port 8008) &
   else
-    (cd "$KG_DIR" && uvicorn service:app --reload --port 8005) &
+    (cd "$KG_DIR" && uvicorn service:app --reload --port 8008) &
   fi
   PIDS+=($!)
 else
@@ -209,13 +221,14 @@ echo ""
 echo "═══════════════════════════════════════════════════════"
 echo "  MarketAtlas — all services starting in parallel"
 echo "  Backend:   http://localhost:8000"
+echo "  Celery:    worker + beat (events + market data)"
 echo "  Frontend:  http://localhost:5173"
 echo "  Market:    http://localhost:8004  (if found)"
 echo "  World St:  http://localhost:8006  (if found)"
 echo "  Memory:    http://localhost:8010  (if found)"
 echo "  Graph:     http://localhost:8005  (if found)"
 echo "  Simulator: http://localhost:8007  (if found)"
-echo "  KG Agent:  http://localhost:8005  (if found, conflicts with Graph)"
+echo "  KG Agent:  http://localhost:8008"
 echo "═══════════════════════════════════════════════════════"
 echo "  Press Ctrl+C to stop everything."
 echo ""
