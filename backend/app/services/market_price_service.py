@@ -16,16 +16,12 @@ class MarketPriceService:
         self._repo = MarketPriceRepository(session)
 
     async def create(self, data: MarketPriceCreate) -> MarketPrice:
-        exists = await self._repo.exists(data.entity_id, data.price_date)
-        if exists:
-            raise HTTPException(
-                status_code=409,
-                detail="Market price for this entity on this date already exists",
-            )
-        price = await self._repo.create(data.model_dump())
+        price = await self._repo.bulk_upsert([data.model_dump()])
+        if not price:
+            raise HTTPException(status_code=409, detail="Could not write market price")
         await self._session.commit()
-        await self._session.refresh(price)
-        return price
+        await self._session.refresh(price[0])
+        return price[0]
 
     async def get(self, price_id: int) -> MarketPrice:
         price = await self._repo.get_by_id(price_id)
@@ -65,12 +61,9 @@ class MarketPriceService:
     async def bulk_create(
         self, records: list[MarketPriceCreate]
     ) -> list[MarketPrice]:
-        created: list[MarketPrice] = []
-        for rec in records:
-            exists = await self._repo.exists(rec.entity_id, rec.price_date)
-            if not exists:
-                price = await self._repo.create(rec.model_dump())
-                created.append(price)
+        if not records:
+            return []
+        created = await self._repo.bulk_upsert([r.model_dump() for r in records])
         if created:
             await self._session.commit()
             for p in created:

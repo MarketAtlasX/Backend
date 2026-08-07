@@ -1,9 +1,12 @@
+import logging
 from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.entity import EntityRepository
 from app.schemas.market_price import MarketPriceCreate
+
+logger = logging.getLogger(__name__)
 
 
 class MarketDataService:
@@ -41,11 +44,18 @@ class MarketDataService:
         except ImportError:
             raise ImportError("yfinance is not installed")
 
-        stock = yf.Ticker(ticker)
-        df = stock.history(period=period, interval=interval)
+        try:
+            stock = yf.Ticker(ticker)
+            df = stock.history(period=period, interval=interval)
+        except Exception as e:
+            # Delisted / unsupported tickers and transient yfinance failures
+            # must not abort the whole batch; return nothing for this entity.
+            logger.warning("yfinance fetch failed for %s: %s", ticker, e)
+            return []
 
         if df.empty:
-            raise ValueError(f"No price data returned for ticker '{ticker}'")
+            logger.warning("No price data returned for ticker '%s'", ticker)
+            return []
 
         import math
 

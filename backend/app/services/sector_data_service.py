@@ -169,3 +169,22 @@ class SectorDataService:
 
 def get_sector_data_service(db: AsyncSession = None) -> SectorDataService:
     return SectorDataService(db)
+
+
+async def get_sector_snapshot() -> dict[str, Any]:
+    """Module-level snapshot helper — opens its own session.
+
+    Used by the chatbot context builder and other non-route callers.
+    Returns an empty snapshot on failure so callers never crash.
+    """
+    from app.database import AsyncSessionLocal
+
+    try:
+        async with AsyncSessionLocal() as db:
+            service = SectorDataService(db)
+            snapshot = await service.get_snapshot()
+            if snapshot:
+                return snapshot
+    except Exception as e:
+        logger.warning("Sector snapshot unavailable: %s", e)
+    return {"fallback": True, "sectors": {}, "version": 1}

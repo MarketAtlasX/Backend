@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 from typing import List, Optional
 
 from sqlalchemy import and_, desc, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.market_price import MarketPrice
@@ -109,6 +110,31 @@ class MarketPriceRepository(BaseRepository[MarketPrice]):
         """Check if a price record exists (prevents duplicates)."""
         price = await self.get_by_entity_and_date(entity_id, price_date)
         return price is not None
+
+    async def bulk_upsert(self, records: list[dict]) -> List[MarketPrice]:
+        """Insert or update OHLCV rows on the (entity_id, price_date) key.
+
+        yfinance returns only genuinely new bars while markets are open and the
+        prior session's bars otherwise, so an insert-or-update is required to
+        keep existing rows fresh instead of silently skipping them.
+        """
+        if not records:
+            return []
+        stmt = pg_insert(self.model).values(records)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["entity_id", "price_date"],
+            set_={
+                "open_price": stmt.excluded.open_price,
+                "high_price": stmt.excluded.high_price,
+                "low_price": stmt.excluded.low_price,
+                "close_price": stmt.excluded.close_price,
+                "volume": stmt.excluded.volume,
+                "source": stmt.excluded.source,
+                "updated_at": datetime.utcnow(),
+            },
+        ).returning(self.model)
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
 
     # ------------------------------------------------------------------
     # Filtered counts

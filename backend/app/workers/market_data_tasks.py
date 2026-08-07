@@ -71,6 +71,8 @@ def fetch_all_market_data_task(self, period: str = "1mo", interval: str = "1d") 
     from app.services.market_price_service import MarketPriceService
 
     async def _run():
+        import asyncio
+
         async with AsyncSessionLocal() as db:
             entity_repo = EntityRepository(db)
             all_entities = await entity_repo.get_all(limit=1000)
@@ -94,6 +96,8 @@ def fetch_all_market_data_task(self, period: str = "1mo", interval: str = "1d") 
                     })
                 except Exception as e:
                     logger.warning("Failed to fetch data for %s: %s", entity.name, e)
+                # Pace requests to stay clear of Yahoo's unauthenticated rate limit.
+                await asyncio.sleep(0.5)
 
             return {
                 "total_entities": len(entities_with_tickers),
