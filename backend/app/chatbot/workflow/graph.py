@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import uuid
 from typing import Any, Literal
 
@@ -24,7 +25,6 @@ from ..explain.shap_explainer import SHAPExplainer
 from ..memory.short_term import short_term_memory
 from ..models import ChatResponse, IntentType
 from ..rag.retriever import seed_knowledge_base
-
 
 class AgentState(dict):
     query: str
@@ -57,9 +57,118 @@ attention_explainer = AttentionExplainer()
 graph_explainer = GraphExplainer()
 
 
+async def _load_live_context(user_id: str) -> dict:
+    """Assemble live events, sector snapshot, and user portfolio context."""
+    ctx: dict[str, Any] = {}
+
+    async def _load_events():
+        try:
+            from sqlalchemy import text
+
+            from app.database import AsyncSessionLocal
+
+            async with AsyncSessionLocal() as db:
+                result = await db.execute(
+                    text(
+                        "SELECT title, event_type, severity, source, event_date "
+                        "FROM events WHERE event_date >= NOW() - INTERVAL '48 hours' "
+                        "ORDER BY event_date DESC LIMIT 8"
+                    )
+                )
+                rows = [dict(r._mapping) for r in result.all()]
+            if rows:
+                ctx["live_events"] = [
+                    {
+                        "title": r["title"],
+                        "event_type": r["event_type"],
+                        "severity": r["severity"],
+                        "source": r["source"],
+                        "event_date": str(r["event_date"]),
+                    }
+                    for r in rows
+                ]
+        except Exception:
+            pass
+
+    async def _load_sectors():
+        try:
+            from app.services.sector_data_service import get_sector_snapshot
+
+            snapshot = await get_sector_snapshot()
+            if snapshot and snapshot.get("sectors"):
+                ctx["market_snapshot"] = snapshot
+        except Exception:
+            pass
+
+    async def _load_portfolios():
+        try:
+            from sqlalchemy import text
+
+            from app.database import AsyncSessionLocal
+
+            uid = user_id or "0"
+            try:
+                uid = int(uid)
+            except (TypeError, ValueError):
+                uid = 0
+            async with AsyncSessionLocal() as db:
+                result = await db.execute(
+                    text(
+                        "SELECT id, name, allocation FROM portfolios "
+                        "WHERE user_id = :uid ORDER BY updated_at DESC LIMIT 3"
+                    ),
+                    {"uid": uid},
+                )
+                rows = [dict(r._mapping) for r in result.all()]
+            if rows:
+                ctx["portfolios"] = rows
+        except Exception:
+            pass
+
+    await asyncio.gather(_load_events(), _load_sectors(), _load_portfolios())
+    return ctx
+
+
 async def route_intent(state: AgentState) -> AgentState:
-    history = short_term_memory.format_context(state["conversation_id"])
-    context = {"conversation_context": history}
+    # Prefer DB-persisted history so context survives restarts; fall back to
+    # the in-memory cache for conversations still in the current process.
+    history = ""
+    try:
+        from app.services.chat_history import format_history_context
+
+        history = await format_history_context(
+            state["conversation_id"], max_turns=5
+        ) or short_term_memory.format_context(state["conversation_id"])
+    except Exception:
+        history = short_term_memory.format_context(state["conversation_id"])
+
+    # Structured turn history for providers that accept chat-style messages.
+    conversation_history: list[dict] = []
+    try:
+        from app.services.chat_history import get_recent_messages
+
+        conversation_history = await get_recent_messages(
+            state["conversation_id"], limit=10
+        )
+    except Exception:
+        pass
+
+    context = {"conversation_context": history, "conversation_history": conversation_history}
+
+    # Inject live market/event/portfolio context so agents answer from
+    # current data instead of static templates. All fetches are best-effort.
+    try:
+        context.update(await _load_live_context(state.get("user_id", "default")))
+    except Exception:
+        pass
+
+    # Tool-calling seam: describe available read-only tools to the agents.
+    try:
+        from ..tools.registry import describe_available_tools
+
+        context["available_tools"] = describe_available_tools()
+    except Exception:
+        pass
 
     intent, confidence = router.classify(state["query"], conversation_history=history)
     state["intent"] = intent
@@ -317,9 +426,49 @@ async def calculate_confidence(state: AgentState) -> AgentState:
     return state
 
 
-def store_memory(state: AgentState) -> AgentState:
+async def store_memory(state: AgentState) -> AgentState:
     short_term_memory.add_turn(state["conversation_id"], "user", state["query"])
     short_term_memory.add_turn(state["conversation_id"], "assistant", state["final_response"])
+
+    # Capture per-request Perplexity citations (set in the same execution
+    # context as the LLM calls) so they surface on this turn's response.
+    try:
+        from ..llm.provider_perplexity import get_last_citations
+
+        citations = get_last_citations()
+        if citations:
+            state.setdefault("_context", {})["citations"] = citations
+            state.setdefault("sources", []).extend(citations)
+    except Exception:
+        pass
+
+    try:
+        from app.services.chat_history import persist_turn
+
+        await persist_turn(
+            conversation_id=state["conversation_id"],
+            user_id=state.get("user_id", "default"),
+            role="user",
+            content=state["query"],
+            intent=(
+                state.get("intent").value
+                if state.get("intent")
+                else None
+            ),
+            agents_used=state.get("agents_used"),
+        )
+        await persist_turn(
+            conversation_id=state["conversation_id"],
+            user_id=state.get("user_id", "default"),
+            role="assistant",
+            content=state["final_response"],
+            sources=list(set(state.get("sources", []))),
+        )
+    except Exception:
+        logging.getLogger(__name__).warning(
+            "Failed to persist turn for conversation %s",
+            state.get("conversation_id"),
+        )
     return state
 
 
@@ -433,6 +582,13 @@ async def run_chat(query: str, conversation_id: str = None, user_id: str = "defa
             "sources": ["MarketAtlas Intelligence"],
         }
 
+    sources = list(set(result.get("sources", [])))
+    ctx = result.get("_context", {})
+    citations = ctx.get("citations", []) if isinstance(ctx, dict) else []
+    if citations:
+        sources.extend(citations)
+        sources = list(dict.fromkeys(sources))
+
     return ChatResponse(
         conversation_id=conversation_id,
         query=query,
@@ -440,6 +596,6 @@ async def run_chat(query: str, conversation_id: str = None, user_id: str = "defa
         intent=result.get("intent", IntentType.IMPACT),
         agents_used=result.get("agents_used", []),
         confidence=result.get("confidence", 0.5),
-        sources=list(set(result.get("sources", []))),
+        sources=sources,
         explanations=result.get("_context", {}).get("explanations"),
     )
