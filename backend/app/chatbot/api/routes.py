@@ -17,7 +17,7 @@ from ..memory.short_term import short_term_memory
 from ..models import ChatRequest, RiskIndexRequest, SimilarityRequest
 from ..rag.vector_store import search_knowledge
 from ..workflow.graph import run_chat
-from .data import COUNTRIES, COUNTRIES_BY_CODE, LIVE_EVENTS, MILITARY_RELATIONS, PORTS, TRADE_ROUTES
+from .data import COUNTRIES, COUNTRIES_BY_CODE, MILITARY_RELATIONS, PORTS, TRADE_ROUTES
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +31,7 @@ async def chat(request: ChatRequest):
         response = await run_chat(
             query=request.query,
             conversation_id=request.conversation_id,
+            user_id=request.user_id,
         )
         return response
     except Exception as e:
@@ -43,6 +44,7 @@ async def chat_stream(request: ChatRequest):
     response = await run_chat(
         query=request.query,
         conversation_id=request.conversation_id,
+        user_id=request.user_id,
     )
 
     async def generate():
@@ -51,31 +53,43 @@ async def chat_stream(request: ChatRequest):
             "intent": response.intent.value,
             "agents_used": response.agents_used,
             "confidence": response.confidence,
+            "sources": response.sources,
         }) + "\n"
-        for chunk in response.response.split(". "):
-            yield json.dumps({"chunk": chunk + ". "}) + "\n"
+        words = response.response.split(" ")
+        for i in range(0, len(words), 4):
+            yield json.dumps({"chunk": " ".join(words[i:i + 4]) + " "}) + "\n"
         yield json.dumps({"done": True}) + "\n"
 
     return StreamingResponse(generate(), media_type="application/x-ndjson")
 
 
 @chat_router.get("/history")
-async def history(limit: int = 20):
+async def history(limit: int = 20, user_id: str = "1"):
     try:
-        from ..knowledge.postgres import get_conversation_history
-        convs = await get_conversation_history(limit)
+        from app.services.chat_history import get_recent_messages, list_conversations
+
+        convs = await list_conversations(user_id, limit=limit)
         return [
             {
                 "id": c.id,
-                "query": c.query[:100],
-                "intent": c.intent,
-                "confidence": c.confidence,
+                "query": c.title,
+                "intent": None,
+                "confidence": None,
                 "created_at": c.created_at.isoformat(),
             }
             for c in convs
         ]
-    except ImportError:
-        return {"message": "Postgres knowledge module not available"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@chat_router.get("/history/{conversation_id}")
+async def conversation_messages(conversation_id: str, limit: int = 20):
+    try:
+        from app.services.chat_history import get_recent_messages
+
+        messages = await get_recent_messages(conversation_id, limit=limit)
+        return {"conversation_id": conversation_id, "messages": messages}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -108,24 +122,69 @@ async def list_events(
     type: str = Query(None, description="Filter by event type"),
     severity: str = Query(None, description="Filter by severity"),
 ):
-    filtered = LIVE_EVENTS
-    if type:
-        filtered = [e for e in filtered if e["event_type"] == type]
-    if severity:
-        filtered = [e for e in filtered if e["severity"] == severity]
-    items = filtered[skip:skip + limit]
-    return {"total": len(filtered), "skip": skip, "limit": limit, "items": items}
+    from sqlalchemy import select
+
+    from app.database import AsyncSessionLocal
+    from app.models.live_event import LiveEvent
+
+    async with AsyncSessionLocal() as db:
+        query = select(LiveEvent).order_by(LiveEvent.first_seen_at.desc())
+        if type:
+            query = query.where(LiveEvent.event_type == type)
+        if severity:
+            buckets = {"critical": (9.0, 10.1), "high": (7.0, 9.0), "medium": (4.0, 7.0), "low": (0.0, 4.0)}
+            lo, hi = buckets.get(severity.lower(), (None, None))
+            if lo is not None:
+                query = query.where(LiveEvent.severity >= lo, LiveEvent.severity < hi)
+        total = len((await db.execute(query)).scalars().all())
+        items = (await db.execute(query.offset(skip).limit(limit))).scalars().all()
+
+    return {
+        "total": total,
+        "skip": skip,
+        "limit": limit,
+        "items": [
+            {
+                "id": ev.id,
+                "title": ev.title,
+                "description": ev.description,
+                "event_type": ev.event_type,
+                "severity": str(ev.severity),
+                "status": ev.status,
+                "event_date": ev.event_date.isoformat() if ev.event_date else None,
+                "source": ev.source,
+                "lat": ev.lat,
+                "lng": ev.lng,
+                "country_code": ev.country_code,
+            }
+            for ev in items
+        ],
+    }
 
 
 @chat_router.get("/events/{event_id}")
 async def get_event(event_id: str):
-    try:
-        eid = int(event_id)
-        for ev in LIVE_EVENTS:
-            if ev["id"] == eid:
-                return ev
-    except ValueError:
-        pass
+    from sqlalchemy import select
+
+    from app.database import AsyncSessionLocal
+    from app.models.live_event import LiveEvent
+
+    async with AsyncSessionLocal() as db:
+        ev = (await db.execute(select(LiveEvent).where(LiveEvent.id == event_id))).scalar_one_or_none()
+    if ev is not None:
+        return {
+            "id": ev.id,
+            "title": ev.title,
+            "description": ev.description,
+            "event_type": ev.event_type,
+            "severity": str(ev.severity),
+            "status": ev.status,
+            "event_date": ev.event_date.isoformat() if ev.event_date else None,
+            "source": ev.source,
+            "lat": ev.lat,
+            "lng": ev.lng,
+            "country_code": ev.country_code,
+        }
     event = event_store.get_event_by_id(event_id)
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")

@@ -56,6 +56,7 @@ class ChatRequest(BaseModel):
     query: str
     conversation_id: Optional[str] = None
     stream: bool = False
+    user_id: str = "default"
 
 
 class ChatResponse(BaseModel):
