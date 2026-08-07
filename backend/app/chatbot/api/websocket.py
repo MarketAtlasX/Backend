@@ -90,6 +90,7 @@ async def handle_websocket(websocket: WebSocket):
             else:
                 query = data.get("query", "")
                 conversation_id = data.get("conversation_id", str(uuid.uuid4()))
+                user_id = data.get("user_id", "default")
                 stream = data.get("stream", False)
 
                 if not query:
@@ -101,7 +102,7 @@ async def handle_websocket(websocket: WebSocket):
                         "type": "stream_start",
                         "conversation_id": conversation_id,
                     })
-                    response = await run_chat(query=query, conversation_id=conversation_id)
+                    response = await run_chat(query=query, conversation_id=conversation_id, user_id=user_id)
                     await websocket.send_json({
                         "type": "metadata",
                         "conversation_id": conversation_id,
@@ -113,7 +114,7 @@ async def handle_websocket(websocket: WebSocket):
                         await websocket.send_json({"type": "chunk", "text": chunk + ". "})
                     await websocket.send_json({"type": "stream_end"})
                 else:
-                    response = await run_chat(query=query, conversation_id=conversation_id)
+                    response = await run_chat(query=query, conversation_id=conversation_id, user_id=user_id)
                     await websocket.send_json({
                         "type": "response",
                         "conversation_id": conversation_id,
