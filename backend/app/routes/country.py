@@ -1,9 +1,11 @@
 """Country routes — both backend overview/news and frontend-facing globe API."""
 
 from fastapi import APIRouter, Depends, HTTPException, Path
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.models.entity import Entity
 from app.repositories.country_repository import CountryRepository
 from app.repositories.military_relation_repository import MilitaryRelationRepository
 from app.repositories.port_repository import PortRepository
@@ -31,7 +33,8 @@ async def list_countries(
     """List all countries with full profile data for the globe view."""
     repo = CountryRepository(db)
     countries = await repo.get_all_ordered(limit=200)
-    return [_country_to_dict(c) for c in countries]
+    ticker_map = await _build_ticker_map(db)
+    return [_country_to_dict(c, ticker_map) for c in countries]
 
 
 # --- Backend endpoints (existing) — use integer IDs ---
@@ -72,7 +75,8 @@ async def get_country_by_code(
     country = await repo.get_by_code(code.upper())
     if country is None:
         raise HTTPException(status_code=404, detail="Country not found")
-    return _country_to_dict(country)
+    ticker_map = await _build_ticker_map(db)
+    return _country_to_dict(country, ticker_map)
 
 
 @router.get("/{code}/relations/trade")
@@ -113,7 +117,28 @@ async def get_country_ports(
 # ---------------------------------------------------------------------------
 
 
-def _country_to_dict(c) -> dict:
+async def _build_ticker_map(db: AsyncSession) -> dict[str, int]:
+    """Build {UPPER_TICKER: entity_id} from all entities with ticker_symbols."""
+    result = await db.execute(
+        select(Entity.id, Entity.ticker_symbols).where(Entity.ticker_symbols.isnot(None))
+    )
+    ticker_map: dict[str, int] = {}
+    for eid, symbols in result.all():
+        for symbol in (symbols or "").split(","):
+            symbol = symbol.strip().upper()
+            if symbol and symbol not in ticker_map:
+                ticker_map[symbol] = eid
+    return ticker_map
+
+
+def _country_to_dict(c, ticker_map: dict[str, int] | None = None) -> dict:
+    tickers = c.tickers.split(",") if c.tickers else []
+    entity_ids: list[int] = []
+    if ticker_map:
+        for ticker in tickers:
+            eid = ticker_map.get(ticker.strip().upper())
+            if eid is not None and eid not in entity_ids:
+                entity_ids.append(eid)
     return {
         "code": c.code,
         "name": c.name,
@@ -123,7 +148,8 @@ def _country_to_dict(c) -> dict:
         "currencySymbol": c.currency_symbol,
         "marketCap": c.market_cap,
         "tradingHours": c.trading_hours,
-        "tickers": c.tickers.split(",") if c.tickers else [],
+        "tickers": tickers,
+        "entityIds": entity_ids,
         "lat": c.latitude,
         "lng": c.longitude,
         "commodities": c.commodities.split(",") if c.commodities else [],
