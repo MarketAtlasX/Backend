@@ -1,4 +1,5 @@
 """Database models for MarketAtlas."""
+from app.models.chat import ChatMessage, Conversation
 from app.models.country import Country
 from app.models.entity import Entity
 from app.models.entity_relationship import EntityRelationship
@@ -27,4 +28,5 @@ __all__ = [
     "LiveEvent", "EventImpact", "EventAffectedAsset",
     "EventNewsArticle", "EventAlert", "UserEventFilter",
     "Portfolio", "SimulationRun", "SectorCache",
+    "Conversation", "ChatMessage",
 ]
