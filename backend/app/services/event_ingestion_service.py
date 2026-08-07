@@ -12,6 +12,7 @@ from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.enums import LiveEventStatus, LiveEventSubType, LiveEventType
 from app.repositories.entity import EntityRepository
 from app.repositories.event import EventRepository
 from app.repositories.event_entity import EventEntityRepository
@@ -55,6 +56,63 @@ def _parse_date(date_str: Optional[str]) -> Optional[datetime]:
     return None
 
 
+# FIPS 10-4 codes that differ from ISO 3166-1 alpha-2. GDELT's artlist
+# `sourcecountry` field uses FIPS codes, while our countries/entities use ISO.
+_FIPS_TO_ISO: dict[str, str] = {
+    "GM": "DE",  # Germany
+    "RS": "RU",  # Russia
+    "KS": "KR",  # South Korea
+    "BM": "MM",  # Myanmar
+    "SF": "ZA",  # South Africa
+    "UK": "GB",  # United Kingdom
+    "UR": "UA",  # Ukraine
+    "EI": "IE",  # Ireland
+    "CF": "TW",  # Taiwan
+    "PO": "PL",  # Poland
+    "MU": "OM",  # Oman
+    "TT": "TL",  # Timor-Leste
+}
+
+
+def _fips_to_iso(code: Optional[str]) -> Optional[str]:
+    if not code:
+        return None
+    code = code.strip().upper()
+    if len(code) != 2:
+        return None
+    return _FIPS_TO_ISO.get(code, code)
+
+
+def _live_event_type(event_type: str) -> LiveEventType:
+    mapping = {
+        "military_conflict": LiveEventType.GEOPOLITICAL,
+        "diplomatic": LiveEventType.GEOPOLITICAL,
+        "sanction": LiveEventType.GEOPOLITICAL,
+        "election": LiveEventType.GEOPOLITICAL,
+        "trade_policy": LiveEventType.ECONOMIC,
+        "economic_data": LiveEventType.ECONOMIC,
+        "regulatory": LiveEventType.REGULATORY,
+        "natural_disaster": LiveEventType.NATURAL_DISASTER,
+        "corporate": LiveEventType.CORPORATE,
+        "market_moving": LiveEventType.MARKET_MOVING,
+    }
+    return mapping.get(event_type, LiveEventType.OTHER)
+
+
+def _live_event_subtype(event_type: str) -> Optional[LiveEventSubType]:
+    mapping = {
+        "sanction": LiveEventSubType.SANCTION,
+        "election": LiveEventSubType.ELECTION,
+        "trade_policy": LiveEventSubType.TRADE_AGREEMENT,
+        "military_conflict": LiveEventSubType.CONFLICT,
+        "diplomatic": LiveEventSubType.DIPLOMATIC_TENSION,
+        "economic_data": LiveEventSubType.ECONOMIC_DATA,
+        "regulatory": LiveEventSubType.REGULATORY_CHANGE,
+        "natural_disaster": LiveEventSubType.NATURAL_DISASTER,
+    }
+    return mapping.get(event_type)
+
+
 class EventIngestionService:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
@@ -81,6 +139,8 @@ class EventIngestionService:
     async def _process_kg_response(self, response: KGResponse, entity_id: int) -> int:
         created: list[tuple[int, int]] = []
 
+        entity = await self._entity_repo.get_by_id(entity_id)
+
         for article in response.news:
             if not article.title or not article.url:
                 continue
@@ -106,6 +166,8 @@ class EventIngestionService:
             await self._event_entity_repo.create_link(event.id, entity_id)
             created.append((event.id, entity_id))
 
+            await self._create_live_event(entity, event_date, event_type, article)
+
         await self._session.commit()
 
         for event_id, ent_id in created:
@@ -115,6 +177,45 @@ class EventIngestionService:
             self._broadcast_new_events(created)
 
         return len(created)
+
+    async def _create_live_event(
+        self,
+        entity,
+        event_date: datetime,
+        event_type: str,
+        article,
+    ) -> None:
+        """Mirror a KG-ingested article into a geo-tagged LiveEvent row."""
+        from app.schemas.live_event import LiveEventCreate
+        from app.services.live_event_service import LiveEventService
+
+        lat = lng = None
+        country_code = None
+        if entity is not None:
+            lat = entity.latitude
+            lng = entity.longitude
+            country_code = entity.country_code or _fips_to_iso(
+                getattr(article, "source_country", None)
+            )
+
+        try:
+            live_service = LiveEventService(self._session)
+            await live_service.create(LiveEventCreate(
+                title=article.title[:500],
+                description=(article.content or article.title)[:5000],
+                event_type=_live_event_type(event_type),
+                sub_type=_live_event_subtype(event_type),
+                severity=5.0,
+                status=LiveEventStatus.BREAKING,
+                source=(article.source or "knowledge-graph-agent")[:100],
+                source_urls=[{"url": article.url}],
+                lat=lat,
+                lng=lng,
+                country_code=country_code,
+                event_date=event_date,
+            ))
+        except Exception:
+            logger.exception("Failed to persist live event for '%s'", article.title)
 
     def _broadcast_new_events(self, created: list[tuple[int, int]]) -> None:
         from app.services.event_broadcaster import get_broadcaster

@@ -11,8 +11,15 @@ from typing import Any
 
 import httpx
 
+from app.core.enums import LiveEventStatus
 from app.services.event_broadcaster import EventBroadcaster
-from app.services.event_ingestion_service import _classify_event, _parse_date
+from app.services.event_ingestion_service import (
+    _classify_event,
+    _fips_to_iso,
+    _live_event_subtype,
+    _live_event_type,
+    _parse_date,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -35,12 +42,26 @@ class GDELTStreamService:
 
         while True:
             try:
-                articles = await self._fetch_recent()
-                for article in articles:
-                    await self._process_article(article)
+                await self.poll_once()
             except Exception:
                 logger.exception("GDELT poll cycle failed")
             await asyncio.sleep(POLL_INTERVAL)
+
+    async def poll_once(self) -> int:
+        """Run a single fetch-and-ingest cycle.
+
+        Returns the number of new Event records created. Rate-limited
+        internally (GDELT enforces ~1 request/5s), so callers should not
+        run this concurrently.
+        """
+        created = 0
+        articles = await self._fetch_recent()
+        for article in articles:
+            if await self._process_article(article) is not None:
+                created += 1
+        if created:
+            logger.info("GDELT batch created %d new events", created)
+        return created
 
     async def _load_existing_urls(self) -> None:
         from app.database import AsyncSessionLocal
@@ -78,32 +99,36 @@ class GDELTStreamService:
             return data.get("articles", [])
         return []
 
-    async def _process_article(self, article: dict[str, Any]) -> None:
+    async def _process_article(self, article: dict[str, Any]) -> dict[str, Any] | None:
         url = article.get("url", "")
         title = article.get("title", "")
         if not url or not title:
-            return
+            return None
 
         if url in self._seen_urls:
-            return
+            return None
         self._seen_urls.add(url)
 
         event = await self._create_event(article)
         if event is None:
-            return
+            return None
 
         await self._broadcaster.broadcast_event(event)
+        return event
 
     async def _create_event(self, article: dict[str, Any]) -> dict[str, Any] | None:
         from app.database import AsyncSessionLocal
         from app.repositories.entity import EntityRepository
         from app.repositories.event import EventRepository
         from app.repositories.event_entity import EventEntityRepository
+        from app.schemas.live_event import LiveEventCreate
+        from app.services.live_event_service import LiveEventService
 
         title = article.get("title", "")[:255]
         content = article.get("content") or article.get("title", "")
         source = article.get("domain", "gdelt")[:255] or "gdelt"
         source_url = article.get("url", "")
+        source_country = article.get("sourcecountry", "")
 
         seendate = article.get("seendate", "")
         event_date = _parse_date(seendate) or datetime.utcnow()
@@ -135,6 +160,28 @@ class GDELTStreamService:
 
             await db.commit()
 
+            geo = await self._resolve_geo(db, matched, source_country)
+
+            try:
+                live_service = LiveEventService(db)
+                await live_service.create(LiveEventCreate(
+                    title=title,
+                    description=str(content)[:5000],
+                    event_type=_live_event_type(event_type),
+                    sub_type=_live_event_subtype(event_type),
+                    severity=5.0,
+                    status=LiveEventStatus.BREAKING,
+                    source=source,
+                    source_urls=[{"url": source_url}],
+                    lat=geo["lat"],
+                    lng=geo["lng"],
+                    country_code=geo["country_code"],
+                    region=geo["region"],
+                    event_date=event_date,
+                ))
+            except Exception:
+                logger.exception("Failed to persist live event for '%s'", title)
+
             for entity_id in matched:
                 self._dispatch_analysis(event.id, entity_id)
 
@@ -149,6 +196,48 @@ class GDELTStreamService:
             }
 
         return None
+
+    async def _resolve_geo(
+        self, db: Any, matched_ids: list[int], source_country: str
+    ) -> dict[str, Any]:
+        """Resolve lat/lng/country for a live event.
+
+        Prefers a matched entity with coordinates (entities carry country
+        centroids / HQ coordinates), falling back to the article's GDELT
+        `sourcecountry` FIPS code mapped to our countries table.
+        """
+        from sqlalchemy import select
+
+        from app.models.country import Country
+        from app.models.entity import Entity as EntityModel
+
+        if matched_ids:
+            result = await db.execute(
+                select(EntityModel).where(EntityModel.id.in_(matched_ids))
+            )
+            for entity in result.scalars().all():
+                if entity.latitude is not None and entity.longitude is not None:
+                    return {
+                        "lat": entity.latitude,
+                        "lng": entity.longitude,
+                        "country_code": entity.country_code,
+                        "region": entity.country_code,
+                    }
+
+        country_code = _fips_to_iso(source_country)
+        if country_code:
+            result = await db.execute(select(Country).where(Country.code == country_code))
+            country = result.scalar_one_or_none()
+            if country is not None:
+                return {
+                    "lat": country.latitude,
+                    "lng": country.longitude,
+                    "country_code": country_code,
+                    "region": None,
+                }
+            return {"lat": None, "lng": None, "country_code": country_code, "region": None}
+
+        return {"lat": None, "lng": None, "country_code": None, "region": None}
 
     async def _match_entities(
         self, title: str, content: str, repo: "EntityRepository",  # noqa: F821
